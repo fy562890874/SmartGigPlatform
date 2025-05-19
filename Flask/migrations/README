@@ -1,0 +1,23 @@
+Alembic migrations README
+
+This directory contains database schema migration scripts managed by Alembic.
+
+Basic commands (run from the project root where manage.py is):
+
+# Initialize Alembic (only once) - This step is usually done already
+# flask db init
+
+# Create a new migration script after changing SQLAlchemy models
+flask db migrate -m "Short description of changes"
+
+# Apply migrations to the database
+flask db upgrade
+
+# Downgrade one migration step
+flask db downgrade
+
+# Show current revision
+flask db current
+
+# Show migration history
+flask db history

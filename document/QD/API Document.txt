@@ -1,0 +1,611 @@
+API Documentation Analysis
+Here's an analysis of each API file provided:
+
+1. Authentication API (auth_api.py)
+This API handles user authentication, including registration, login, and fetching current user information.
+
+Namespace: auth
+Description: 用户认证操作 (User authentication operations)
+Endpoints:
+
+POST /auth/register
+Description: 用户注册 (User registration)
+Input Model (UserRegistrationInput):
+phone_number (string, required): User's phone number.
+password (string, required): User's password.
+user_type (string, optional, enum: freelancer, employer): User type, defaults to freelancer.
+Output Model (UserPublicOutput):
+id (integer, readonly)
+uuid (string, readonly)
+phone_number (string, readonly)
+email (string, readonly)
+nickname (string, readonly)
+current_role (string, readonly, enum: freelancer, employer)
+available_roles (list of strings, readonly)
+status (string, readonly)
+last_login_at (datetime, readonly)
+registered_at (datetime, readonly)
+Responses:
+201: User registered successfully.
+400: Invalid input.
+409: User already exists.
+POST /auth/login
+Description: 用户登录 (User login)
+Input Model (UserLoginInput):
+phone_number (string, required): User's phone number.
+password (string, required): User's password.
+Output Model (LoginSuccessOutput):
+access_token (string, readonly): JWT access token.
+user (object, nested UserPublicOutput): User information.
+Responses:
+200: Login successful.
+400: Invalid input.
+401: Authentication failed.
+GET /auth/me
+Description: 获取当前登录用户信息 (Get current logged-in user information)
+Authentication: JWT Required.
+Output Model (UserPublicOutput): (Same as registration output)
+Responses:
+200: User profile retrieved successfully.
+401: Unauthorized.
+404: User not found.
+2. User API (user_api.py)
+This API handles user-specific operations for authenticated users, such as fetching and updating user details and changing passwords.
+
+Namespace: users
+Description: 用户相关操作 (需要认证) (User-related operations (requires authentication))
+Endpoints:
+
+GET /users/me
+Description: 获取当前登录用户的详细信息 (Get detailed information of the current logged-in user)
+Authentication: JWT Required.
+Output Model (UserPublicOutput): (Reuses model from auth_api.py)
+Responses:
+200: Successfully retrieved current user information.
+PUT /users/me
+Description: 更新当前登录用户的信息 (例如: 邮箱) (Update current logged-in user's information (e.g., email))
+Authentication: JWT Required.
+Input Model (UserUpdateInput):
+email (string, optional): New email address.
+Output Model (UserPublicOutput): (Reuses model from auth_api.py)
+Responses:
+200: User information updated successfully.
+POST /users/me/change-password
+Description: 修改当前登录用户的密码 (Change current logged-in user's password)
+Authentication: JWT Required.
+Input Model (PasswordChangeInput):
+old_password (string, required): Current password.
+new_password (string, required, min_length: 6): New password.
+Responses:
+200: Password changed successfully.
+3. Employer Profile API (employer_profile_api.py)
+This API manages employer user profiles.
+
+Namespace: profiles/employer
+Description: 雇主用户档案操作 (需要认证) (Employer user profile operations (requires authentication))
+Endpoints:
+
+GET /profiles/employer/me
+Description: 获取当前登录用户的雇主档案 (Get the employer profile of the current logged-in user)
+Authentication: JWT Required.
+Output Model (EmployerProfileOutput):
+user_id (integer, readonly)
+profile_type (string, enum: individual, company)
+real_name (string)
+avatar_url (string)
+nickname (string)
+location_province (string)
+location_city (string)
+location_district (string)
+contact_phone (string)
+verification_status (string, readonly)
+credit_score (integer, readonly)
+average_rating (float, readonly)
+total_jobs_posted (integer, readonly)
+company_name (string, optional)
+business_license_number (string, optional)
+business_license_photo_url (string, optional)
+company_address (string, optional)
+company_description (string, optional)
+created_at (datetime, readonly)
+updated_at (datetime, readonly)
+Responses:
+200: Successfully retrieved employer profile.
+PUT /profiles/employer/me
+Description: 创建或更新当前登录用户的雇主档案 (Create or update the employer profile of the current logged-in user)
+Authentication: JWT Required.
+Input Model (EmployerProfileInput):
+profile_type (string, required, enum: individual, company)
+real_name (string, optional)
+avatar_url (string, optional)
+nickname (string, optional)
+location_province (string, optional)
+location_city (string, optional)
+location_district (string, optional)
+contact_phone (string, optional)
+company_name (string, optional)
+business_license_number (string, optional)
+business_license_photo_url (string, optional)
+company_address (string, optional)
+company_description (string, optional)
+Output Model (EmployerProfileOutput): (Same as GET output)
+Responses:
+200: Employer profile updated successfully.
+201: Employer profile created successfully.
+4. Freelancer Profile API (freelancer_profile_api.py)
+This API manages freelancer user profiles and their associated skills.
+
+Namespace: profiles/freelancer
+Description: 零工用户档案及技能操作 (需要认证) (Freelancer user profile and skill operations (requires authentication))
+Profile Endpoints:
+
+GET /profiles/freelancer/me
+Description: 获取当前登录用户的零工档案 (Get the freelancer profile of the current logged-in user)
+Authentication: JWT Required.
+Output Model (FreelancerProfileOutput):
+user_id (integer, readonly)
+real_name (string)
+gender (string, enum: male, female, other, unknown)
+birth_date (date)
+avatar_url (string)
+nickname (string)
+location_province (string)
+location_city (string)
+location_district (string)
+bio (string)
+work_preference (raw JSON object)
+verification_status (string, readonly)
+credit_score (integer, readonly)
+average_rating (float, readonly)
+total_orders_completed (integer, readonly)
+created_at (datetime, readonly)
+updated_at (datetime, readonly)
+Responses:
+200: Successfully retrieved freelancer profile.
+PUT /profiles/freelancer/me
+Description: 创建或更新当前登录用户的零工档案 (Create or update the freelancer profile of the current logged-in user)
+Authentication: JWT Required.
+Input Model (FreelancerProfileInput):
+real_name (string, optional)
+gender (string, optional, enum: male, female, other, unknown)
+birth_date (date, optional)
+avatar_url (string, optional)
+nickname (string, optional)
+location_province (string, optional)
+location_city (string, optional)
+location_district (string, optional)
+bio (string, optional)
+work_preference (raw JSON object, optional)
+Output Model (FreelancerProfileOutput): (Same as GET output)
+Responses:
+200: Freelancer profile updated successfully.
+201: Freelancer profile created successfully.
+Freelancer Skill Endpoints:
+
+GET /profiles/freelancer/me/skills
+Description: 当前零工获取自己的技能列表 (Current freelancer gets their own list of skills)
+Authentication: JWT Required.
+Output Model: List of FreelancerSkillOutput
+freelancer_user_id (integer, readonly)
+skill_id (integer, readonly)
+skill (object, nested NestedSkillOutputForFreelancer):
+id (integer, readonly)
+name (string, readonly)
+category (string, readonly)
+proficiency_level (string)
+years_of_experience (integer)
+certificate_url (string)
+certificate_verified (boolean, readonly)
+created_at (datetime, readonly)
+updated_at (datetime, readonly)
+Responses:
+200: Successfully retrieved freelancer skills list.
+403: User is not a freelancer or freelancer profile does not exist.
+POST /profiles/freelancer/me/skills
+Description: 当前零工为自己的档案添加技能 (Current freelancer adds a skill to their profile)
+Authentication: JWT Required.
+Input Model (FreelancerSkillAddInput):
+skill_id (integer, required): ID of the skill to add.
+proficiency_level (string, optional)
+years_of_experience (integer, optional)
+certificate_url (string, optional)
+Output Model (FreelancerSkillOutput): (Same as GET list item)
+Responses:
+201: Freelancer skill added successfully.
+400: Invalid input or skill already exists.
+403: User is not a freelancer or freelancer profile does not exist.
+404: Specified skill ID does not exist.
+PUT /profiles/freelancer/me/skills/{skill_id}
+Description: 当前零工更新已关联的技能信息 (Current freelancer updates information of an associated skill)
+Authentication: JWT Required.
+Path Parameter: skill_id (integer): ID of the freelancer's skill to update.
+Input Model (FreelancerSkillUpdateInput):
+proficiency_level (string, optional)
+years_of_experience (integer, optional)
+certificate_url (string, optional)
+Output Model (FreelancerSkillOutput): (Same as GET list item)
+Responses:
+200: Freelancer skill updated successfully.
+400: Invalid input.
+403: User is not a freelancer.
+404: Freelancer is not associated with this skill or skill ID does not exist.
+DELETE /profiles/freelancer/me/skills/{skill_id}
+Description: 当前零工从自己的档案中移除技能 (Current freelancer removes a skill from their profile)
+Authentication: JWT Required.
+Path Parameter: skill_id (integer): ID of the freelancer's skill to remove.
+Responses:
+204: Freelancer skill removed successfully.
+403: User is not a freelancer.
+404: Freelancer is not associated with this skill or skill ID does not exist.
+5. Job API (job_api.py)
+This API deals with job postings, including creation, searching, updating, and managing job details.
+
+Namespace: jobs
+Description: 工作信息相关操作 (Job information related operations)
+Job Endpoints:
+
+GET /jobs/
+Description: 获取工作列表 (支持筛选和分页) (Get job list (supports filtering and pagination))
+Query Parameters (job_list_parser):
+page (integer, default: 1)
+per_page (integer, default: 10)
+q (string, optional): Keyword search (title, description).
+status (string, optional): Job status.
+job_category (string, optional)
+location_province (string, optional)
+location_city (string, optional)
+location_district (string, optional)
+latitude (float, optional): For geographic range search.
+longitude (float, optional): For geographic range search.
+radius_km (float, optional): Radius in km for geographic search.
+salary_min (float, optional)
+salary_max (float, optional)
+salary_type (string, optional)
+job_tags (string, optional, comma-separated)
+is_urgent (boolean, optional)
+start_time_from (string, optional, ISO 8601)
+start_time_to (string, optional, ISO 8601)
+sort_by (string, optional, e.g., created_at_desc)
+employer_user_id (integer, optional)
+Output Model (PaginatedJobResponse):
+items: List of JobOutput
+pagination: Pagination object (page, per_page, total_pages, total_items)
+JobOutput Model:
+id (integer, readonly)
+employer_user_id (integer, readonly)
+title (string, required)
+description (string, required)
+job_category (string, required)
+job_tags (list of strings)
+location_address (string, required)
+location_province (string)
+location_city (string)
+location_district (string)
+location_point (nested GeoPoint: type, coordinates)
+start_time (datetime, required)
+end_time (datetime, required)
+salary_amount (float, required)
+salary_type (string, required, enum: hourly, daily, weekly, monthly, fixed, negotiable)
+salary_negotiable (boolean)
+required_people (integer, required)
+accepted_people (integer, readonly)
+skill_requirements (string)
+is_urgent (boolean)
+status (string, readonly)
+cancellation_reason (string, readonly)
+view_count (integer, readonly)
+application_deadline (datetime)
+created_at (datetime, readonly)
+updated_at (datetime, readonly)
+Responses:
+200: Successfully retrieved job list.
+POST /jobs/
+Description: 雇主发布新工作 (Employer posts a new job)
+Authentication: JWT Required.
+Input Model (JobCreationInput):
+(Similar fields to JobOutput but for creation, e.g., title, description, salary_amount, latitude, longitude instead of location_point directly, etc.)
+Output Model (JobOutput): (Same as GET list item)
+Responses:
+201: Job created successfully.
+GET /jobs/{job_id}
+Description: 获取指定ID的工作详情 (浏览次数会增加) (Get details of a specific job by ID (view count will increase))
+Path Parameter: job_id (integer)
+Output Model (JobOutput): (Same as GET list item)
+Responses:
+200: Successfully retrieved job details.
+PUT /jobs/{job_id}
+Description: 更新指定ID的工作信息 (仅限发布者) (Update information of a specific job by ID (publisher only))
+Authentication: JWT Required.
+Path Parameter: job_id (integer)
+Input Model (JobUpdateInput): (Subset of JobCreationInput fields, all optional)
+Output Model (JobOutput): (Same as GET list item)
+Responses:
+200: Job information updated successfully.
+DELETE /jobs/{job_id}
+Description: 删除指定ID的工作 (逻辑删除) (Delete a specific job by ID (logical delete))
+Authentication: JWT Required.
+Path Parameter: job_id (integer)
+Responses:
+200: Job deleted successfully.
+POST /jobs/{job_id}/close
+Description: 雇主关闭工作招聘 (Employer closes job recruitment)
+Authentication: JWT Required.
+Path Parameter: job_id (integer)
+Output Model (JobOutput): (Same as GET list item)
+Responses:
+200: Job closed successfully.
+POST /jobs/{job_id}/duplicate
+Description: 雇主复制工作 (Employer duplicates a job)
+Authentication: JWT Required.
+Path Parameter: job_id (integer): ID of the job to duplicate.
+Output Model (JobOutput): (Same as GET list item)
+Responses:
+201: Job duplicated successfully.
+GET /jobs/my_posted
+Description: 雇主获取自己发布的工作列表 (Employer gets a list of jobs they posted)
+Authentication: JWT Required.
+Query Parameters (my_posted_jobs_parser):
+page (integer, default: 1)
+per_page (integer, default: 10)
+status (string, optional)
+sort_by (string, optional)
+Output Model (PaginatedJobResponse): (Same as GET /jobs/)
+Responses:
+200: Successfully retrieved list of posted jobs.
+GET /jobs/recommendations
+Description: (零工) 获取个性化推荐工作列表 ((Freelancer) Get a list of personalized recommended jobs)
+Authentication: JWT Required.
+Query Parameters (recommended_jobs_parser):
+count (integer, default: 10)
+Output Model (RecommendedJobsResponse):
+items: List of JobOutput
+Responses:
+200: Successfully retrieved recommended jobs.
+Job Required Skill Endpoints:
+
+POST /jobs/{job_id}/required_skills
+Description: 为工作添加技能要求 (Add a skill requirement to a job)
+Authentication: JWT Required.
+Path Parameter: job_id (integer)
+Input Model (JobRequiredSkillInput):
+skill_id (integer, required)
+is_mandatory (boolean, optional, default: true)
+Output Model (JobRequiredSkillOutput):
+job_id (integer, readonly)
+skill_id (integer, readonly)
+is_mandatory (boolean)
+skill (object, nested SkillOutputForJobReq): id, name, category
+Responses:
+201: Successfully added skill requirement to job.
+DELETE /jobs/{job_id}/required_skills/{skill_id}
+Description: 移除工作的技能要求 (Remove a skill requirement from a job)
+Authentication: JWT Required.
+Path Parameters: job_id (integer), skill_id (integer)
+Responses:
+204: Successfully removed skill requirement from job.
+6. Job Application API (job_application_api.py)
+This API manages job applications made by freelancers to job postings by employers.
+
+Namespace: job_applications
+Description: 工作申请相关操作 (Job application related operations)
+Endpoints:
+
+POST /job_applications/jobs/{job_id}/apply
+Description: 零工用户申请特定工作 (Freelancer user applies for a specific job)
+Authentication: JWT Required.
+Path Parameter: job_id (integer): Target job ID.
+Input Model (JobApplicationCreationInput):
+application_message (string, optional): Application message.
+Output Model (JobApplicationOutput):
+id (integer, readonly)
+job_id (integer, readonly)
+freelancer_user_id (integer, readonly)
+employer_user_id (integer, readonly)
+freelancer_info (nested FreelancerApplicantInfo: id, nickname, avatar_url)
+job_info (nested JobSummaryForApplicationOutput: id, title)
+application_message (string)
+status (string, readonly)
+rejection_reason (string, readonly)
+created_at (datetime, readonly)
+processed_at (datetime, readonly)
+Responses:
+201: Application submitted successfully.
+GET /job_applications/jobs/{job_id}/list
+Description: 雇主查看其发布工作的申请列表 (分页) (Employer views the list of applications for their posted job (paginated))
+Authentication: JWT Required.
+Path Parameter: job_id (integer): Target job ID.
+Query Parameters (application_list_parser):
+page (integer, default: 1)
+per_page (integer, default: 10)
+status (string, optional): Filter by application status.
+Output Model (PaginatedJobApplicationResponse):
+items: List of JobApplicationOutput
+pagination: PaginationInfo object (page, per_page, total_pages, total_items)
+Responses:
+200: Successfully retrieved job application list.
+GET /job_applications/my
+Description: 零工用户查看自己提交的申请列表 (分页) (Freelancer user views their own submitted application list (paginated))
+Authentication: JWT Required.
+Query Parameters (application_list_parser): (Same as employer's list)
+Output Model (PaginatedJobApplicationResponse): (Same as employer's list)
+Responses:
+200: Successfully retrieved my application list.
+GET /job_applications/{application_id}
+Description: 获取单个申请详情 (申请人或相关雇主可访问) (Get single application details (accessible by applicant or related employer))
+Authentication: JWT Required.
+Path Parameter: application_id (integer)
+Output Model (JobApplicationOutput): (Same as POST apply output)
+Responses:
+200: Successfully retrieved application details.
+PUT /job_applications/{application_id}/process
+Description: 雇主处理工作申请 (接受/拒绝) (Employer processes a job application (accept/reject))
+Authentication: JWT Required.
+Path Parameter: application_id (integer)
+Input Model (JobApplicationProcessInput):
+status (string, required, enum: accepted, rejected): New application status.
+reason (string, optional): Reason (e.g., rejection reason).
+Output Model (JobApplicationOutput): (May include created_order_id if accepted and an order is created)
+Responses:
+200: Application processed successfully.
+POST /job_applications/{application_id}/cancel
+Description: 零工用户取消自己的工作申请 (Freelancer user cancels their own job application)
+Authentication: JWT Required.
+Path Parameter: application_id (integer)
+Input Model (JobApplicationCancelInput):
+reason (string, optional): Cancellation reason.
+Output Model (JobApplicationOutput): (Same as POST apply output, status updated)
+Responses:
+200: Application cancelled successfully.
+7. Order API (order_api.py)
+This API is responsible for managing orders that are created after a job application is accepted.
+
+Namespace: orders
+Description: 订单管理 (Order management)
+Endpoints:
+
+GET /orders/
+Description: 用户获取自己的订单列表 (根据角色区分是零工还是雇主) (User gets their own order list (differentiated by role: freelancer or employer))
+Authentication: JWT Required.
+Query Parameters (order_list_parser):
+page (integer, default: 1)
+per_page (integer, default: 10)
+status (string, optional): Filter by order status.
+role (string, optional, choices: freelancer, employer): User's role for the query.
+Output Model (PaginatedOrderResponse):
+items: List of OrderOutput
+pagination: Pagination object (page, per_page, total_pages, total_items)
+OrderOutput Model:
+id (integer, readonly)
+job_id (integer, readonly)
+application_id (integer, readonly)
+freelancer_user_id (integer, readonly)
+employer_user_id (integer, readonly)
+order_amount (float)
+platform_fee (float)
+freelancer_income (float)
+start_time_scheduled (datetime)
+end_time_scheduled (datetime)
+start_time_actual (datetime)
+end_time_actual (datetime)
+work_duration_actual (float)
+status (string, readonly)
+freelancer_confirmation_status (string, readonly)
+employer_confirmation_status (string, readonly)
+confirmation_deadline (datetime)
+cancellation_reason (string)
+cancelled_by (string)
+created_at (datetime, readonly)
+updated_at (datetime, readonly)
+job (nested JobBasicForOrder: id, title)
+freelancer (nested UserBasicForOrderFreelancer: id, nickname, avatar_url)
+employer (nested UserBasicForOrderEmployer: id, nickname, avatar_url)
+Responses:
+200: Successfully retrieved order list.
+GET /orders/{order_id}
+Description: 获取指定订单详情 (仅限订单参与方) (Get details of a specific order (order participants only))
+Authentication: JWT Required.
+Path Parameter: order_id (integer)
+Output Model (OrderOutput): (Same as GET list item)
+Responses:
+200: Successfully retrieved order details.
+403: No permission to access this order.
+404: Order not found.
+POST /orders/{order_id}/actions
+Description: 执行订单操作 (开始工作、完成工作、确认完成、取消订单) (Perform order actions (start work, complete work, confirm completion, cancel order))
+Authentication: JWT Required.
+Path Parameter: order_id (integer)
+Input Model (OrderActionInput):
+action (string, required, enum: start_work, complete_work, confirm_completion, cancel_order)
+cancellation_reason (string, optional): Required if action is cancel_order.
+start_time_actual (datetime, optional): For complete_work.
+end_time_actual (datetime, optional): For complete_work.
+Output Model (OrderOutput): (Same as GET list item, status updated)
+Responses:
+200: Order action successful.
+400: Invalid action or request parameters.
+403: No permission to perform this action.
+404: Order not found.
+409: Action conflicts with current order status.
+PUT /orders/{order_id}/actual_times
+Description: (若独立) 更新订单的实际工作开始和结束时间 (通常零工操作) ((If independent) Update actual work start and end times for the order (usually freelancer action))
+Authentication: JWT Required.
+Path Parameter: order_id (integer)
+Input Model (OrderTimeUpdateInput):
+start_time_actual (datetime, required)
+end_time_actual (datetime, required)
+Output Model (OrderOutput): (Same as GET list item, times updated)
+Responses:
+200: Successfully updated actual work times.
+400: Invalid input or time error.
+403: No permission to update this order's time.
+404: Order not found.
+8. Skill API (skill_api.py)
+This API provides access to a public library of skills available on the platform.
+
+Namespace: skills
+Description: 公共技能信息库 (Public skill information library)
+Endpoints:
+
+GET /skills/
+Description: 获取平台技能标签库 (公开) (Get the platform's skill tag library (public))
+Query Parameters (skill_list_parser):
+page (integer, default: 1)
+per_page (integer, default: 20)
+q (string, optional): Search skills by name.
+category (string, optional): Filter skills by category.
+is_hot (boolean, optional): Filter for hot skills.
+Output Model (PaginatedSkillResponse):
+items: List of SkillOutput
+pagination: Pagination object (page, per_page, total_pages, total_items)
+SkillOutput Model:
+id (integer, readonly)
+name (string, readonly)
+category (string, readonly)
+description (string, readonly)
+is_hot (boolean, readonly)
+created_at (datetime, readonly)
+updated_at (datetime, readonly)
+Responses:
+200: Successfully retrieved skill list.
+9. Verification API (verification_api.py)
+This API manages user verification processes, such as identity verification for individuals or business verification for companies.
+
+Namespace: verifications
+Description: 用户认证管理 (User verification management)
+Endpoints:
+
+POST /verifications/submit
+Description: 用户提交认证申请 (个人实名/企业资质) (User submits a verification application (individual real-name/company qualification))
+Authentication: JWT Required.
+Input Model (VerificationSubmissionInput):
+profile_type (string, required, enum: freelancer, employer_individual, employer_company): Type of profile for which verification is being applied.
+submitted_data (raw JSON object, required): Submitted verification materials (e.g., real name, ID card number, photo URL).
+Output Model (VerificationRecordOutput):
+id (integer, readonly)
+user_id (integer, readonly)
+profile_type (string, readonly)
+submitted_data (raw JSON, readonly, sensitive data might be masked)
+status (string, readonly, enum: pending, approved, rejected)
+reviewer_id (integer, readonly)
+reviewed_at (datetime, readonly)
+rejection_reason (string, readonly)
+created_at (datetime, readonly)
+updated_at (datetime, readonly)
+Responses:
+201: Verification application submitted successfully.
+GET /verifications/me
+Description: 用户获取自己的认证记录 (分页) (User gets their own verification records (paginated))
+Authentication: JWT Required.
+Query Parameters (verification_list_parser):
+page (integer, default: 1)
+per_page (integer, default: 10)
+profile_type (string, optional): Filter by profile type.
+Output Model (PaginatedVerificationResponse):
+items: List of VerificationRecordOutput
+page (integer)
+per_page (integer)
+total_pages (integer)
+total_items (integer)
+Responses:
+200: Successfully retrieved user verification records.
+This analysis should provide a comprehensive overview of your backend API interfaces.

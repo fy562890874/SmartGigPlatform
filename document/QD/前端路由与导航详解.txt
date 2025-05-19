@@ -1,0 +1,173 @@
+前端路由与导航详解 - 智慧零工平台本文档详细说明智慧零工平台前端各 .vue 文件与其对应的路由路径、命名，以及页面间通过按钮或链接触发的导航关系。1. 路由配置文件 (router/index.js) 概览import { createRouter, createWebHistory } from 'vue-router';
+import NProgress from 'nprogress'; // 可选的页面加载进度条
+import 'nprogress/nprogress.css';   // 进度条样式
+
+// --- 视图组件动态导入 ---
+// 公共页面
+const Home = () => import('@/views/Home.vue');
+const Login = () => import('@/views/auth/Login.vue');
+const Register = () => import('@/views/auth/Register.vue');
+const ForgotPassword = () => import('@/views/auth/ForgotPassword.vue');
+const JobSearch = () => import('@/views/job/JobSearch.vue');
+const JobDetail = () => import('@/views/job/JobDetail.vue');
+const SkillMarket = () => import('@/views/skill/SkillMarket.vue');
+const PolicyGuide = () => import('@/views/info/PolicyGuide.vue');
+const PlatformIntro = () => import('@/views/info/PlatformIntro.vue');
+const HelpCenter = () => import('@/views/info/HelpCenter.vue');
+const NotFound = () => import('@/views/NotFound.vue');
+
+// 用户中心布局及通用页面
+const UserCenterLayout = () => import('@/views/user/UserCenterLayout.vue');
+const UserProfile = () => import('@/views/user/Profile.vue');
+const ChangePassword = () => import('@/views/user/ChangePassword.vue');
+const AccountSettings = () => import('@/views/user/AccountSettings.vue');
+const NotificationCenter = () => import('@/views/user/NotificationCenter.vue');
+
+// 零工 (Freelancer) 特定页面
+const FreelancerDashboard = () => import('@/views/freelancer/Dashboard.vue');
+const MyApplications = () => import('@/views/freelancer/MyApplications.vue');
+const MyOrdersFreelancer = () => import('@/views/freelancer/MyOrders.vue');
+const FreelancerProfileEdit = () => import('@/views/freelancer/ProfileEdit.vue');
+const MySkills = () => import('@/views/freelancer/MySkills.vue');
+const AddSkill = () => import('@/views/freelancer/AddSkill.vue');
+const EditSkill = () => import('@/views/freelancer/EditSkill.vue');
+const MyWalletFreelancer = () => import('@/views/freelancer/MyWallet.vue'); // 假设路径
+const MyReviewsFreelancer = () => import('@/views/freelancer/MyReviews.vue'); // 假设路径
+const VerificationFreelancer = () => import('@/views/freelancer/Verification.vue');
+
+// 雇主 (Employer) 特定页面
+const EmployerDashboard = () => import('@/views/employer/Dashboard.vue');
+const PostJob = () => import('@/views/employer/PostJob.vue');
+const EditJob = () => import('@/views/employer/EditJob.vue');
+const MyPostedJobs = () => import('@/views/employer/MyPostedJobs.vue');
+const JobApplicants = () => import('@/views/employer/JobApplicants.vue');
+const MyOrdersEmployer = () => import('@/views/employer/MyOrders.vue');
+const EmployerProfileEdit = () => import('@/views/employer/ProfileEdit.vue');
+const MyWalletEmployer = () => import('@/views/employer/MyWallet.vue'); // 假设路径
+const MyReviewsEmployer = () => import('@/views/employer/MyReviews.vue'); // 假设路径
+const VerificationEmployer = () => import('@/views/employer/Verification.vue');
+
+// --- 路由定义 ---
+const routes = [
+    // 1. 公共模块
+    { path: '/', name: 'Home', component: Home, meta: { title: '首页 - 智慧零工平台' } },
+    { path: '/login', name: 'Login', component: Login, meta: { title: '用户登录', guest: true } },
+    { path: '/register', name: 'Register', component: Register, meta: { title: '用户注册', guest: true } },
+    { path: '/forgot-password', name: 'ForgotPassword', component: ForgotPassword, meta: { title: '忘记密码', guest: true } },
+    { path: '/jobs', name: 'JobSearch', component: JobSearch, meta: { title: '工作广场' } },
+    { path: '/jobs/:id', name: 'JobDetail', component: JobDetail, props: true, meta: { title: '工作详情' } },
+    { path: '/skills', name: 'SkillMarket', component: SkillMarket, meta: { title: '技能广场' } },
+    { path: '/policy', name: 'PolicyGuide', component: PolicyGuide, meta: { title: '政策指南' } },
+    { path: '/about', name: 'PlatformIntro', component: PlatformIntro, meta: { title: '关于我们' } },
+    { path: '/help', name: 'HelpCenter', component: HelpCenter, meta: { title: '帮助中心' } },
+
+    // 2. 用户中心 (需要认证)
+    {
+        path: '/user',
+        component: UserCenterLayout, // 所有用户中心页面的父布局
+        meta: { requiresAuth: true },
+        redirect: '/user/profile', // 默认重定向到个人资料或对应角色的Dashboard
+        children: [
+            // 2.1 通用用户中心页面
+            { path: 'profile', name: 'UserProfile', component: UserProfile, meta: { title: '我的资料' } },
+            { path: 'change-password', name: 'ChangePassword', component: ChangePassword, meta: { title: '修改密码' } },
+            { path: 'settings', name: 'AccountSettings', component: AccountSettings, meta: { title: '账号安全' } },
+            { path: 'notifications', name: 'NotificationCenter', component: NotificationCenter, meta: { title: '消息中心' } },
+
+            // 2.2 零工 (Freelancer) 路由
+            // 注意: meta.role 用于路由守卫判断角色权限
+            { path: 'freelancer/dashboard', name: 'FreelancerDashboard', component: FreelancerDashboard, meta: { title: '零工工作台', role: 'freelancer' } },
+            { path: 'freelancer/applications', name: 'MyApplications', component: MyApplications, meta: { title: '我的申请', role: 'freelancer' } },
+            { path: 'freelancer/orders', name: 'MyOrdersFreelancer', component: MyOrdersFreelancer, meta: { title: '我的订单 (零工)', role: 'freelancer' } },
+            { path: 'freelancer/profile/edit', name: 'FreelancerProfileEdit', component: FreelancerProfileEdit, meta: { title: '编辑零工档案', role: 'freelancer' } },
+            { path: 'freelancer/skills', name: 'MySkills', component: MySkills, meta: { title: '我的技能', role: 'freelancer' } },
+            { path: 'freelancer/skills/add', name: 'AddSkill', component: AddSkill, meta: { title: '添加技能', role: 'freelancer' } },
+            { path: 'freelancer/skills/:skillId(\\d+)/edit', name: 'EditSkillFreelancer', component: EditSkill, props: true, meta: { title: '编辑技能', role: 'freelancer' } }, // skillId 为数字
+            { path: 'freelancer/wallet', name: 'MyWalletFreelancer', component: MyWalletFreelancer, meta: { title: '我的钱包 (零工)', role: 'freelancer' } },
+            { path: 'freelancer/reviews', name: 'MyReviewsFreelancer', component: MyReviewsFreelancer, meta: { title: '我的评价 (零工)', role: 'freelancer' } },
+            { path: 'freelancer/verification', name: 'VerificationFreelancer', component: VerificationFreelancer, meta: { title: '零工认证', role: 'freelancer' } },
+
+            // 2.3 雇主 (Employer) 路由
+            { path: 'employer/dashboard', name: 'EmployerDashboard', component: EmployerDashboard, meta: { title: '雇主工作台', role: 'employer' } },
+            { path: 'employer/jobs/post', name: 'PostJob', component: PostJob, meta: { title: '发布新工作', role: 'employer' } },
+            { path: 'employer/jobs/:jobId(\\d+)/edit', name: 'EditJob', component: EditJob, props: true, meta: { title: '编辑工作', role: 'employer' } },
+            { path: 'employer/jobs/posted', name: 'MyPostedJobs', component: MyPostedJobs, meta: { title: '我发布的工作', role: 'employer' } },
+            { path: 'employer/jobs/:jobId(\\d+)/applicants', name: 'JobApplicants', component: JobApplicants, props: true, meta: { title: '查看工作申请', role: 'employer' } },
+            { path: 'employer/orders', name: 'MyOrdersEmployer', component: MyOrdersEmployer, meta: { title: '我的订单 (雇主)', role: 'employer' } },
+            { path: 'employer/profile/edit', name: 'EmployerProfileEdit', component: EmployerProfileEdit, meta: { title: '编辑雇主档案', role: 'employer' } },
+            { path: 'employer/wallet', name: 'MyWalletEmployer', component: MyWalletEmployer, meta: { title: '我的钱包 (雇主)', role: 'employer' } },
+            { path: 'employer/reviews', name: 'MyReviewsEmployer', component: MyReviewsEmployer, meta: { title: '我的评价 (雇主)', role: 'employer' } },
+            { path: 'employer/verification', name: 'VerificationEmployer', component: VerificationEmployer, meta: { title: '雇主认证', role: 'employer' } },
+        ]
+    },
+
+    // 404 页面
+    { path: '/:pathMatch(.*)*', name: 'NotFound', component: NotFound, meta: { title: '页面未找到' } }
+];
+
+const router = createRouter({
+    history: createWebHistory(process.env.BASE_URL || '/'), // Ensure BASE_URL is correctly set
+    routes,
+    scrollBehavior(to, from, savedPosition) {
+        if (savedPosition) {
+            return savedPosition;
+        } else {
+            return { top: 0 };
+        }
+    }
+});
+
+// --- 路由守卫 ---
+router.beforeEach((to, from, next) => {
+    NProgress.start(); // 开始进度条
+
+    const store = useAuthStore(); // 假设使用 Pinia store
+    const isAuthenticated = store.isAuthenticated;
+    const userRole = store.user?.current_role; // 从 store 获取用户角色
+
+    // 更新页面标题
+    document.title = to.meta.title || '智慧零工平台';
+
+    if (to.meta.requiresAuth && !isAuthenticated) {
+        // 如果目标路由需要认证但用户未认证
+        next({ name: 'Login', query: { redirect: to.fullPath } }); // 跳转到登录页，并带上重定向参数
+    } else if (to.meta.guest && isAuthenticated) {
+        // 如果目标路由是为未认证用户准备的 (如登录页)，但用户已认证
+        next({ name: 'Home' }); // 跳转到首页
+    } else if (to.meta.role && to.meta.role !== userRole) {
+        // 如果目标路由需要特定角色，但当前用户角色不符
+        // 可以跳转到无权限提示页或用户对应角色的Dashboard
+        console.warn(`权限不足: 访问 ${to.path} 需要角色 ${to.meta.role}, 当前角色 ${userRole}`);
+        // store.logout(); // 或者直接登出
+        // next({ name: 'Login', query: { message: '权限不足，请重新登录或联系管理员' } });
+        next({ name: 'Home' }); // 简单处理，跳转首页
+    }
+    else {
+        next(); // 正常跳转
+    }
+});
+
+router.afterEach(() => {
+    NProgress.done(); // 结束进度条
+});
+
+export default router;
+说明:props: true 用于将路由参数 :id 或 :jobId 作为组件的 props 传入。meta 字段用于存储路由元信息，如页面标题 title、是否需要认证 requiresAuth、是否为访客页面 guest、所需角色 role。路由守卫 (beforeEach) 处理认证逻辑、权限校验和页面标题更新。NProgress 用于显示页面加载进度条，提升体验。useAuthStore() 是 Pinia (或 Vuex) 的示例，用于获取用户认证状态和角色。2. 页面文件与路由名对应关系路由名 (name)Vue 文件路径 (@/views/...)HomeHome.vueLoginauth/Login.vueRegisterauth/Register.vueForgotPasswordauth/ForgotPassword.vueJobSearchjob/JobSearch.vueJobDetailjob/JobDetail.vueSkillMarketskill/SkillMarket.vuePolicyGuideinfo/PolicyGuide.vuePlatformIntroinfo/PlatformIntro.vueHelpCenterinfo/HelpCenter.vueUserCenterLayoutuser/UserCenterLayout.vueUserProfileuser/Profile.vueChangePassworduser/ChangePassword.vueAccountSettingsuser/AccountSettings.vueNotificationCenteruser/NotificationCenter.vueFreelancerDashboardfreelancer/Dashboard.vueMyApplicationsfreelancer/MyApplications.vueMyOrdersFreelancerfreelancer/MyOrders.vueFreelancerProfileEditfreelancer/ProfileEdit.vueMySkillsfreelancer/MySkills.vueAddSkillfreelancer/AddSkill.vueEditSkillFreelancerfreelancer/EditSkill.vueMyWalletFreelancerfreelancer/MyWallet.vueMyReviewsFreelancerfreelancer/MyReviews.vueVerificationFreelancerfreelancer/Verification.vueEmployerDashboardemployer/Dashboard.vuePostJobemployer/PostJob.vueEditJobemployer/EditJob.vueMyPostedJobsemployer/MyPostedJobs.vueJobApplicantsemployer/JobApplicants.vueMyOrdersEmployeremployer/MyOrders.vueEmployerProfileEditemployer/ProfileEdit.vueMyWalletEmployeremployer/MyWallet.vueMyReviewsEmployeremployer/MyReviews.vueVerificationEmployeremployer/Verification.vueNotFoundNotFound.vue3. 按钮/链接触发的导航关系 (部分示例)AppHeader.vue (全局顶部导航)Logo 点击: router.push({ name: 'Home' })"工作广场" 链接: router.push({ name: 'JobSearch' })"技能广场" 链接: router.push({ name: 'SkillMarket' })"登录" 按钮: router.push({ name: 'Login' })"注册" 按钮: router.push({ name: 'Register' })用户头像下拉菜单 "个人中心": router.push({ name: 'UserProfile' }) (或对应角色的 Dashboard)用户头像下拉菜单 "退出登录": 执行登出逻辑 -> router.push({ name: 'Login' })Home.vue (首页)快捷入口 "家政服务": router.push({ name: 'JobSearch', query: { category: '家政服务' } })工作卡片 "查看详情": router.push({ name: 'JobDetail', params: { id: job.id } })"查看更多" (热门工作): router.push({ name: 'JobSearch' })auth/Login.vue (登录页)"忘记密码?" 链接: router.push({ name: 'ForgotPassword' })"立即注册" 按钮: router.push({ name: 'Register' })"登录" 按钮成功后: router.push(redirectPath || { name: userRole === 'freelancer' ? 'FreelancerDashboard' : 'EmployerDashboard' })auth/Register.vue (注册页)"直接登录" 按钮: router.push({ name: 'Login' })"注册" 按钮成功后: (同登录成功逻辑)job/JobSearch.vue (工作广场)工作卡片点击/“查看详情”按钮: router.push({ name: 'JobDetail', params: { id: job.id } })分页组件页码改变: 更新查询参数并重新获取数据，URL 可能会变化 (如果页码在 URL 中)。job/JobDetail.vue (工作详情页)"立即报名" 按钮 (未登录时): router.push({ name: 'Login', query: { redirect: route.fullPath } })"立即报名" 按钮 (未认证时): router.push({ name: 'VerificationFreelancer' })面包屑 "首页": router.push({ name: 'Home' })面包屑 "工作广场": router.push({ name: 'JobSearch' })UserCenterSidebar.vue (用户中心侧边栏)所有 <el-menu-item> 的 index 属性即为其路由路径，点击后由 <el-menu router> 属性自动导航。例如: <el-menu-item index="/user/freelancer/applications">我的申请</el-menu-item> 点击后跳转到 MyApplications 页面。freelancer/MyApplications.vue (我的申请)工作标题链接: router.push({ name: 'JobDetail', params: { id: application.job_info.id } })"查看详情" 按钮: (若有独立申请详情页) router.push({ name: 'ApplicationDetail', params: { id: application.id } })employer/MyPostedJobs.vue (我发布的工作)工作标题链接: router.push({ name: 'JobDetail', params: { id: job.id } })"查看申请" 按钮: router.push({ name: 'JobApplicants', params: { jobId: job.id } })"编辑" 按钮: router.push({ name: 'EditJob', params: { jobId: job.id } })通用导航方法:在 Vue 组件中，通常使用 this.$router.push() (Options API) 或 useRouter().push() (Composition API) 进行编程式导航。// Composition API 示例
+import { useRouter } from 'vue-router';
+
+export default {
+  setup() {
+    const router = useRouter();
+
+    const goToLogin = () => {
+      router.push({ name: 'Login' });
+    };
+
+    const goToJobDetail = (jobId) => {
+      router.push({ name: 'JobDetail', params: { id: jobId } });
+    };
+
+    return { goToLogin, goToJobDetail };
+  }
+}
+此路由和导航计划为前端应用的页面跳转提供了清晰的蓝图。在开发过程中，应严格遵循此计划，确保导航逻辑的正确性和一致性。

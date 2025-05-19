@@ -1,0 +1,32 @@
+前端视觉风格指南 - 智慧零工平台1. 设计理念本平台旨在打造一个专业、权威、高效且具有亲和力的政府主导的公共就业服务平台。视觉风格需体现：高级感 (Sophistication): 简洁、现代、精致的视觉元素。政务风格 (Government Affairs Style): 稳重、规范、值得信赖。易用性 (User-Friendliness): 清晰的导航、直观的操作，兼顾不同用户群体的数字素养。现代感 (Modernity): 采用毛玻璃等现代设计元素，提升视觉体验。2. 色彩体系 (Color Palette)主色调 (Primary Color):政务红 (Government Red): #CC0000 (或相近的深红色，用于强调、重要操作、Logo 点缀)。政务风格中红色通常代表权威和重要性。辅助灰/蓝 (Auxiliary Gray/Blue): 考虑到纯红白搭配在政务场景下的大面积使用可能过于刺眼，引入 #409EFF (Element Plus 默认主蓝) 或中性灰色 #5F6368 作为辅助主色，用于大面积的背景、导航、以及部分按钮，以平衡视觉，增加专业感。红色可作为点缀和强调色。辅助色 (Secondary Colors):纯白 (Pure White): #FFFFFF (作为主要背景色，营造干净、明亮的空间感)。浅灰 (Light Gray): #F2F6FC (Element Plus 辅助背景色，用于卡片、分割线、不同区域的区分)。中灰 (Medium Gray): #909399 (用于次要文字、提示信息、禁用状态)。深灰 (Dark Gray): #303133 (用于主要文字内容，保证阅读性)。状态色 (Status Colors):成功 (Success): #67C23A (Element Plus 默认绿色)。警告 (Warning): #E6A23C (Element Plus 默认橙色)。危险/错误 (Danger/Error): #F56C6C (Element Plus 默认红色，可与政务红区分或统一)。信息 (Info): #909399 (Element Plus 默认灰色)。色彩应用原则:大面积使用白色和浅灰色作为背景，营造简洁、专业的政务风格。政务红作为强调色，用于关键按钮、Logo、重要提示或标题装饰。辅助的灰/蓝色用于导航栏、部分次要按钮或信息模块背景，增加层次感。确保色彩对比度符合 WCAG AA 标准，保证信息可读性。3. 字体规范 (Typography)中文字体: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif (优先使用系统默认中文字体，确保跨平台显示效果)。英文字体: "Helvetica Neue", Arial, sans-serif。字号:主标题 (H1): 24px - 28px页面标题 (H2): 20px - 22px模块标题 (H3): 18px卡片/列表标题 (H4): 16px正文内容: 14px (主要) - 16px (可适当调整)辅助文字/说明: 12px - 13px字重:标题: Medium (500) 或 Semi-bold (600)。正文: Regular (400)。强调: Medium (500) 或 Bold (700)。行高: 1.5 到 1.8 倍，确保阅读舒适性。4. 布局与间距 (Layout & Spacing)栅格系统: 采用 Element Plus 的 24 栅格系统进行页面布局，确保响应式和一致性。间距单位: 推荐使用 8px 作为基础间距单位 (如 8px, 16px, 24px, 32px)，保持视觉节奏。卡片与边框:卡片 (<el-card>) 使用浅灰色背景或白色背景，搭配细微的 box-shadow 营造层次感。圆角: 4px - 8px，增加亲和力。毛玻璃效果 (Frosted Glass):应用于模态框 (<el-dialog>)、下拉菜单 (<el-dropdown-menu>)、侧边栏 (<el-aside>) 或特定背景区域。CSS 实现: backdrop-filter: blur(10px) saturate(180%); background-color: rgba(255, 255, 255, 0.75); (白色系毛玻璃) 或 background-color: rgba(R, G, B, 0.75); (其他色系，注意调整透明度)。注意浏览器兼容性和性能影响，适度使用。5. 图标 (Icons)图标库: 优先使用 Element Plus 内置图标。对于特定业务图标，可引入第三方图标库 (如 Font Awesome, Material Icons) 或 SVG 自定义图标。风格: 简洁、线性、表意明确，符合整体政务和高级感风格。颜色: 通常使用深灰色或主色调。交互状态下可变色。6. 按钮规范 (Button Specification) - 使用 Element Plus主要按钮 (type="primary"):颜色: 主色调 (政务红 #CC0000 或辅助主色 #409EFF)。用途: 核心操作，如“登录”、“注册”、“发布”、“立即报名”、“确认支付”。设计: 实心填充，圆角。可搭配图标。次要按钮 (默认类型或 type="default"):颜色: 白色背景，主色调文字和边框。用途: 普通操作，如“查看详情”、“取消”、“保存草稿”。设计: 边框按钮，圆角。文字按钮 (type="text"):颜色: 主色调文字或深灰色文字。用途: 辅助性操作，如“忘记密码”、“更多”、“编辑”。设计: 无边框，鼠标悬浮时可有背景色或下划线。危险按钮 (type="danger"):颜色: 状态红色 (#F56C6C)。用途: 删除、强提醒的取消等具有破坏性或警示性的操作。尺寸 (size): 根据场景选择 large, default, small。状态: 包括 hover, focus, active, disabled 状态，需有明确视觉变化。disabled: 使用浅灰色背景和文字，降低透明度。圆角: 统一使用 Element Plus 默认圆角或自定义为 4px。7. 表单规范 (Form Specification) - 使用 Element Plus布局 (<el-form>):标签位置 (label-position): top 或 right，根据页面空间和信息密度决定。政务风格中 right 较常见。标签宽度 (label-width): 保持一致。输入框 (<el-input>):清晰的 placeholder。必填项使用星号 * 标记 (Element Plus 表单项 required 属性自动处理)。错误提示在输入框下方，使用危险红色文字。选择器 (<el-select>, <el-cascader>, <el-date-picker>):样式与输入框统一。下拉菜单可考虑使用轻微的毛玻璃效果。校验: 使用 Element Plus 的表单校验规则，提供即时反馈。8. Element Plus 主题定制方式一 (SCSS变量覆盖): 如果项目使用 SCSS，可以通过覆盖 Element Plus 的 SCSS 变量来定制主题色、圆角、边框等。创建自定义的 SCSS 文件，引入 Element Plus 的主题变量文件，并覆盖所需变量。例如，修改主色调为政务红：// custom-theme.scss
+@forward 'element-plus/theme-chalk/src/common/var.scss' with (
+  $colors: (
+    'primary': (
+      'base': #CC0000, // 政务红
+    ),
+    // 可以根据需要覆盖其他颜色
+    'success': (
+      'base': #529b2e,
+    ),
+    'warning': (
+      'base': #da8a18,
+    ),
+    'danger': (
+      'base': #d43030,
+    ),
+    'error': (
+      'base': #d43030,
+    ),
+    'info': (
+      'base': #767679,
+    ),
+  ),
+  // $button: (
+  //   'border-radius': 4px,
+  // ),
+  // $card: (
+  //   'border-radius': 6px,
+  // )
+);
+@use "element-plus/theme-chalk/src/index.scss" as *; // 引入所有 Element Plus 样式
+方式二 (CSS变量覆盖 - 针对深色模式或更细致的控制): Element Plus 也支持 CSS 变量，可以在全局 CSS 中覆盖。按需引入: 为了优化打包体积，务必配置 Element Plus 的按需引入。通过遵循此视觉风格指南，可以确保智慧零工平台前端界面在视觉上达到统一、专业、高级且易用的目标，并有效融合政务风格与现代设计元素。

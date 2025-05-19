@@ -1,0 +1,659 @@
+前端详细设计方案：智慧零工平台
+核心技术栈： Vue.js (Vue 3 preferred), Vue Router, Vuex (or Pinia), Axios, Element Plus (PC端) / Vant (移动端) 或类似UI库。
+
+一、前端页面路由结构及主要功能
+我们将按照用户角色（公共、零工、雇主）和功能模块来组织页面。
+
+路由配置文件 ( router/index.js ) 示例结构:
+
+JavaScript
+
+import { createRouter, createWebHistory } from 'vue-router';
+
+// 公共页面
+const Home = () => import('@/views/Home.vue');
+const Login = () => import('@/views/auth/Login.vue');
+const Register = () => import('@/views/auth/Register.vue');
+const ForgotPassword = () => import('@/views/auth/ForgotPassword.vue');
+const JobSearch = () => import('@/views/job/JobSearch.vue'); // 工作广场
+const JobDetail = () => import('@/views/job/JobDetail.vue');
+const SkillMarket = () => import('@/views/skill/SkillMarket.vue'); // 技能广场 (公共技能库)
+const NotFound = () => import('@/views/NotFound.vue');
+const PolicyGuide = () => import('@/views/info/PolicyGuide.vue'); // 政策指南
+const PlatformIntro = () => import('@/views/info/PlatformIntro.vue'); // 平台介绍/关于我们
+const HelpCenter = () => import('@/views/info/HelpCenter.vue'); // 帮助中心
+
+// 通用用户中心 (需要登录)
+const UserCenterLayout = () => import('@/views/user/UserCenterLayout.vue');
+const UserProfile = () => import('@/views/user/Profile.vue'); // 个人资料 (基础信息)
+const ChangePassword = () => import('@/views/user/ChangePassword.vue');
+const AccountSettings = () => import('@/views/user/AccountSettings.vue'); // 账号安全 (绑定手机等)
+const NotificationCenter = () => import('@/views/user/NotificationCenter.vue'); // 消息通知
+
+// 零工 (Freelancer) 特定页面 (嵌套在 UserCenterLayout 或独立布局)
+const FreelancerDashboard = () => import('@/views/freelancer/Dashboard.vue');
+const MyApplications = () => import('@/views/freelancer/MyApplications.vue'); // 我的申请
+const MyOrdersFreelancer = () => import('@/views/freelancer/MyOrders.vue'); // 我的订单 (零工视角)
+const FreelancerProfileEdit = () => import('@/views/freelancer/ProfileEdit.vue'); // 零工档案编辑
+const MySkills = () => import('@/views/freelancer/MySkills.vue'); // 我的技能
+const AddSkill = () => import('@/views/freelancer/AddSkill.vue'); // 添加技能
+const EditSkill = () => import('@/views/freelancer/EditSkill.vue'); // 编辑技能
+const MyWalletFreelancer = () => import('@/views/freelancer/MyWallet.vue'); // 我的钱包 (零工)
+const MyReviewsFreelancer = () => import('@/views/freelancer/MyReviews.vue'); // 我收到的评价 (零工)
+const VerificationFreelancer = () => import('@/views/freelancer/Verification.vue'); // 零工认证
+
+// 雇主 (Employer) 特定页面 (嵌套在 UserCenterLayout 或独立布局)
+const EmployerDashboard = () => import('@/views/employer/Dashboard.vue');
+const PostJob = () => import('@/views/employer/PostJob.vue'); // 发布工作
+const EditJob = () => import('@/views/employer/EditJob.vue'); // 编辑工作
+const MyPostedJobs = () => import('@/views/employer/MyPostedJobs.vue'); // 我发布的工作
+const JobApplicants = () => import('@/views/employer/JobApplicants.vue'); // 查看工作申请
+const MyOrdersEmployer = () => import('@/views/employer/MyOrders.vue'); // 我的订单 (雇主视角)
+const EmployerProfileEdit = () => import('@/views/employer/ProfileEdit.vue'); // 雇主档案编辑
+const MyWalletEmployer = () => import('@/views/employer/MyWallet.vue'); // 我的钱包 (雇主)
+const MyReviewsEmployer = () => import('@/views/employer/MyReviews.vue'); // 我收到的评价 (雇主)
+const VerificationEmployer = () => import('@/views/employer/Verification.vue'); // 雇主认证
+
+const routes = [
+    // 公共布局/页面
+    { path: '/', name: 'Home', component: Home, meta: { title: '首页' } },
+    { path: '/login', name: 'Login', component: Login, meta: { title: '登录', guest: true } },
+    { path: '/register', name: 'Register', component: Register, meta: { title: '注册', guest: true } },
+    { path: '/forgot-password', name: 'ForgotPassword', component: ForgotPassword, meta: { title: '忘记密码', guest: true } },
+    { path: '/jobs', name: 'JobSearch', component: JobSearch, meta: { title: '工作广场' } },
+    { path: '/jobs/:id', name: 'JobDetail', component: JobDetail, props: true, meta: { title: '工作详情' } },
+    { path: '/skills', name: 'SkillMarket', component: SkillMarket, meta: { title: '技能广场' } },
+    { path: '/policy', name: 'PolicyGuide', component: PolicyGuide, meta: { title: '政策指南' } },
+    { path: '/about', name: 'PlatformIntro', component: PlatformIntro, meta: { title: '关于我们' } },
+    { path: '/help', name: 'HelpCenter', component: HelpCenter, meta: { title: '帮助中心' } },
+
+    // 用户中心 (需要认证)
+    {
+        path: '/user',
+        component: UserCenterLayout,
+        meta: { requiresAuth: true },
+        children: [
+            { path: 'profile', name: 'UserProfile', component: UserProfile, meta: { title: '个人资料' } },
+            { path: 'change-password', name: 'ChangePassword', component: ChangePassword, meta: { title: '修改密码' } },
+            { path: 'settings', name: 'AccountSettings', component: AccountSettings, meta: { title: '账号设置' } },
+            { path: 'notifications', name: 'NotificationCenter', component: NotificationCenter, meta: { title: '消息中心' } },
+
+            // 零工路由
+            { path: 'freelancer/dashboard', name: 'FreelancerDashboard', component: FreelancerDashboard, meta: { title: '零工工作台', role: 'freelancer' } },
+            { path: 'freelancer/applications', name: 'MyApplications', component: MyApplications, meta: { title: '我的申请', role: 'freelancer' } },
+            { path: 'freelancer/orders', name: 'MyOrdersFreelancer', component: MyOrdersFreelancer, meta: { title: '我的订单', role: 'freelancer' } },
+            { path: 'freelancer/profile/edit', name: 'FreelancerProfileEdit', component: FreelancerProfileEdit, meta: { title: '编辑零工档案', role: 'freelancer' } },
+            { path: 'freelancer/skills', name: 'MySkills', component: MySkills, meta: { title: '我的技能', role: 'freelancer' } },
+            { path: 'freelancer/skills/add', name: 'AddSkill', component: AddSkill, meta: { title: '添加技能', role: 'freelancer' } },
+            { path: 'freelancer/skills/:skillId/edit', name: 'EditSkill', component: EditSkill, props: true, meta: { title: '编辑技能', role: 'freelancer' } },
+            { path: 'freelancer/wallet', name: 'MyWalletFreelancer', component: MyWalletFreelancer, meta: { title: '我的钱包', role: 'freelancer' } },
+            { path: 'freelancer/reviews', name: 'MyReviewsFreelancer', component: MyReviewsFreelancer, meta: { title: '我的评价', role: 'freelancer' } },
+            { path: 'freelancer/verification', name: 'VerificationFreelancer', component: VerificationFreelancer, meta: { title: '零工认证', role: 'freelancer' } },
+
+
+            // 雇主路由
+            { path: 'employer/dashboard', name: 'EmployerDashboard', component: EmployerDashboard, meta: { title: '雇主工作台', role: 'employer' } },
+            { path: 'employer/jobs/post', name: 'PostJob', component: PostJob, meta: { title: '发布工作', role: 'employer' } },
+            { path: 'employer/jobs/:jobId/edit', name: 'EditJob', component: EditJob, props: true, meta: { title: '编辑工作', role: 'employer' } },
+            { path: 'employer/jobs/posted', name: 'MyPostedJobs', component: MyPostedJobs, meta: { title: '我发布的工作', role: 'employer' } },
+            { path: 'employer/jobs/:jobId/applicants', name: 'JobApplicants', component: JobApplicants, props: true, meta: { title: '查看申请', role: 'employer' } },
+            { path: 'employer/orders', name: 'MyOrdersEmployer', component: MyOrdersEmployer, meta: { title: '我的订单', role: 'employer' } },
+            { path: 'employer/profile/edit', name: 'EmployerProfileEdit', component: EmployerProfileEdit, meta: { title: '编辑雇主档案', role: 'employer' } },
+            { path: 'employer/wallet', name: 'MyWalletEmployer', component: MyWalletEmployer, meta: { title: '我的钱包', role: 'employer' } },
+            { path: 'employer/reviews', name: 'MyReviewsEmployer', component: MyReviewsEmployer, meta: { title: '我的评价', role: 'employer' } },
+            { path: 'employer/verification', name: 'VerificationEmployer', component: VerificationEmployer, meta: { title: '雇主认证', role: 'employer' } },
+        ]
+    },
+
+    { path: '/:pathMatch(.*)*', name: 'NotFound', component: NotFound, meta: { title: '页面未找到' } }
+];
+
+const router = createRouter({
+    history: createWebHistory(process.env.BASE_URL),
+    routes
+});
+
+// 路由守卫 (示例)
+router.beforeEach((to, from, next) => {
+  const loggedIn = localStorage.getItem('access_token'); // 或 Vuex state
+  const userRole = localStorage.getItem('user_role'); // 或 Vuex state
+
+  if (to.meta.requiresAuth && !loggedIn) {
+    next({ name: 'Login', query: { redirect: to.fullPath } });
+  } else if (to.meta.guest && loggedIn) {
+    next({ name: 'Home' });
+  } else if (to.meta.role && to.meta.role !== userRole) {
+    // 如果需要严格的角色访问控制，可以跳转到无权限页面或首页
+    // 简单起见，这里仅做演示，实际应用中可能需要更复杂的逻辑
+    console.warn(`试图访问角色不符的页面: ${to.path}, 需要 ${to.meta.role}, 当前 ${userRole}`);
+    next({ name: 'Home' }); // 或者一个专门的 NoPermission.vue 页面
+  }
+  else {
+    next();
+  }
+  document.title = to.meta.title || '智慧零工平台';
+});
+
+export default router;
+二、各模块主要功能及接口覆盖分析
+1. 公共模块 (无需登录或部分无需登录)
+Home.vue (首页)
+
+主要功能: 平台介绍、政策宣传、热门工作类型快捷入口、个性化工作推荐、市场动态展示、优质案例。
+后端接口覆盖:
+获取热门工作类型/分类: GET /jobs/ (可根据参数聚合) 或 GET /skills/ (如果工作类型与技能关联)。
+个性化工作推荐: GET /jobs/recommendations (已提供)。
+市场动态、优质案例: 后端暂未提供专门接口。 (可能需要后台管理系统录入，前端通过通用内容接口获取)
+缺失接口:
+获取轮播图内容接口 (政策宣传、平台活动)。
+获取市场动态数据接口。
+获取优质就业案例接口。
+获取主要工作类别列表接口（如果与技能或工作列表本身不完全一致）。
+auth/Login.vue (登录页)
+
+主要功能: 用户名（手机号）、密码登录、第三方登录入口、忘记密码、注册入口。
+后端接口覆盖:
+手机号密码登录: POST /auth/login (已提供)。
+第三方登录: 后端暂未明确提供接口。 (需求文档提及，但API未体现，通常需要后端配合处理回调和用户绑定)。
+缺失接口:
+第三方登录相关接口 (如获取授权URL、处理回调、绑定账号)。
+auth/Register.vue (注册页)
+
+主要功能: 手机号注册、获取验证码、设置密码、选择用户类型（零工/雇主）。
+后端接口覆盖:
+用户注册: POST /auth/register (已提供)。
+获取短信验证码: 后端暂未提供接口。 (非常重要)。
+缺失接口:
+获取短信验证码接口。
+auth/ForgotPassword.vue (忘记密码页)
+
+主要功能: 通过手机验证码重置密码。
+后端接口覆盖:
+重置密码的直接接口似乎未提供，POST /users/me/change-password 是修改已知旧密码的。可能需要一个新的接口。
+缺失接口:
+发送密码重置验证码接口。
+通过验证码验证并重置密码的接口。
+job/JobSearch.vue (工作广场/工作列表)
+
+主要功能: 列表/卡片展示工作、关键词搜索、多维度筛选（类型、区域、报酬、时间等）、排序、分页、地图找工。
+后端接口覆盖:
+获取工作列表 (含筛选、分页、排序): GET /jobs/ (已提供，参数丰富)。
+地图找工: GET /jobs/ (利用经纬度和半径参数)。
+缺失接口: 无明显缺失，现有接口较完善。
+job/JobDetail.vue (工作详情页)
+
+主要功能: 展示工作详细信息（标题、薪资、地点、时间、描述、要求等）、发布者信息、地图展示位置、在线报名、收藏、分享、相似工作推荐。
+后端接口覆盖:
+获取工作详情: GET /jobs/{job_id} (已提供)。
+零工申请工作: POST /job_applications/jobs/{job_id}/apply (已提供)。
+获取发布者信息: 工作详情接口中包含 employer_user_id，但没有直接获取雇主详细档案的公共接口，可能需要额外请求或后端在工作详情中嵌入更多雇主信息。
+相似工作推荐: 后端暂未提供专门接口。 (需求文档提及，但Job API中未直接体现，可能基于标签、分类在前端实现或后端增加接口)。
+缺失接口:
+收藏工作接口 (用户行为，需要记录)。
+分享计数/处理接口 (如果需要统计)。
+获取单个雇主公共信息接口 (如果工作详情中信息不足)。
+相似工作推荐接口 (如果不在前端实现)。
+skill/SkillMarket.vue (技能广场/公共技能库)
+
+主要功能: 展示平台定义的技能列表、分类、搜索。
+后端接口覆盖:
+获取技能列表: GET /skills/ (已提供，支持分页、搜索、分类)。
+缺失接口: 无明显缺失。
+info/PolicyGuide.vue (政策指南)
+
+主要功能: 展示政策法规、智能推送。
+后端接口覆盖: 后端暂未提供接口。
+缺失接口:
+获取政策列表/详情接口。
+(可选) 基于用户画像的政策推送建议接口。
+info/PlatformIntro.vue (关于我们/平台介绍)
+
+主要功能: 展示平台介绍、联系方式等静态内容。
+后端接口覆盖: 后端暂未提供接口。 (通常为静态内容或从通用内容管理系统获取)。
+缺失接口:
+获取平台介绍内容接口 (如果非纯静态)。
+info/HelpCenter.vue (帮助中心)
+
+主要功能: 常见问题解答、操作指南。
+后端接口覆盖: 后端暂未提供接口。
+缺失接口:
+获取帮助文档/FAQ列表/详情接口。
+2. 通用用户中心模块 (需登录)
+user/UserCenterLayout.vue (用户中心布局页)
+
+主要功能: 提供统一的侧边栏导航或顶部导航，用于在用户中心各页面间切换，展示通用用户信息（头像、昵称），身份切换入口。
+后端接口覆盖:
+获取当前用户信息: GET /auth/me 或 GET /users/me (已提供)。
+身份切换: 后端暂未提供显式接口，但用户注册时可选 user_type，登录后 current_role 和 available_roles 体现了角色。前端主要根据这些信息调整UI和可用功能。如果需要在会话中动态切换主要操作角色（如果用户同时是零工和雇主），可能需要一个更新用户 current_role 的接口。
+缺失接口:
+(可能) 更新用户当前活跃角色接口 (PATCH /users/me/current_role 或类似)。
+user/Profile.vue (个人资料-基础信息)
+
+主要功能: 展示和编辑用户基础信息 (如邮箱，昵称应在特定角色档案中)。
+后端接口覆盖:
+获取用户基础信息: GET /users/me (已提供)。
+更新用户基础信息: PUT /users/me (已提供，目前仅支持邮箱)。
+缺失接口:
+如果需要更新除邮箱外的其他用户表字段（如头像、基础昵称等，但需求文档倾向于角色档案管理这些），则对应接口缺失。
+user/ChangePassword.vue (修改密码页)
+
+主要功能: 用户输入旧密码、新密码、确认新密码来修改登录密码。
+后端接口覆盖:
+修改密码: POST /users/me/change-password (已提供)。
+缺失接口: 无明显缺失。
+user/AccountSettings.vue (账号安全设置)
+
+主要功能: 绑定/修改手机号、邮箱（邮箱更新在Profile页）、第三方账号绑定管理。
+后端接口覆盖:
+修改邮箱: PUT /users/me (已提供)。
+修改手机号、第三方账号绑定: 后端暂未提供接口。
+缺失接口:
+发送更换手机号验证码接口。
+验证并更换手机号接口。
+绑定/解绑第三方账号接口。
+user/NotificationCenter.vue (消息通知中心)
+
+主要功能: 展示系统通知、交易通知、互动提醒，标记已读，删除通知。
+后端接口覆盖: 后端暂未提供接口。 (需求文档有此功能)。
+缺失接口:
+获取通知列表接口 (支持分页、类型筛选)。
+标记通知已读/全部已读接口。
+删除通知接口。
+获取未读通知数量接口。
+3. 零工 (Freelancer) 特定模块 (需登录，零工角色)
+freelancer/Dashboard.vue (零工工作台)
+
+主要功能: 数据概览（收入、订单数）、快捷入口（我的申请、我的订单）、推荐工作。
+后端接口覆盖:
+推荐工作: GET /jobs/recommendations (已提供)。
+收入、订单数统计: 后端暂未提供专门的统计聚合接口。 (可能需要前端自行根据订单列表计算或后端新增)。
+缺失接口:
+零工工作台数据统计接口。
+freelancer/MyApplications.vue (我的申请)
+
+主要功能: 列表展示已申请的工作、申请状态、申请详情、取消申请。
+后端接口覆盖:
+获取我的申请列表: GET /job_applications/my (已提供)。
+查看申请详情: GET /job_applications/{application_id} (已提供)。
+取消申请: POST /job_applications/{application_id}/cancel (已提供)。
+缺失接口: 无明显缺失。
+freelancer/MyOrders.vue (我的订单 - 零工视角)
+
+主要功能: 列表展示承接的订单、订单状态、订单详情、执行订单操作（开始工作、完成工作、确认完成、更新实际工时）。
+后端接口覆盖:
+获取我的订单列表 (零工): GET /orders/ (通过 role 参数区分，已提供)。
+获取订单详情: GET /orders/{order_id} (已提供)。
+执行订单操作: POST /orders/{order_id}/actions (已提供)。
+更新实际工时: PUT /orders/{order_id}/actual_times (已提供)。
+缺失接口: 无明显缺失。
+freelancer/ProfileEdit.vue (零工档案编辑)
+
+主要功能: 创建/编辑零工的详细档案（真实姓名、性别、生日、头像、昵称、地区、简介、工作偏好等）。
+后端接口覆盖:
+获取零工档案: GET /profiles/freelancer/me (已提供)。
+创建/更新零工档案: PUT /profiles/freelancer/me (已提供)。
+缺失接口: 无明显缺失。
+freelancer/MySkills.vue (我的技能)
+
+主要功能: 列表展示自己已添加的技能、熟练度、经验、证书，管理技能（编辑、删除）。
+后端接口覆盖:
+获取我的技能列表: GET /profiles/freelancer/me/skills (已提供)。
+删除技能: DELETE /profiles/freelancer/me/skills/{skill_id} (已提供)。
+缺失接口: 无明显缺失。
+freelancer/AddSkill.vue (添加技能)
+
+主要功能: 从公共技能库选择技能，填写熟练度、经验、证书链接等信息后添加至个人技能档案。
+后端接口覆盖:
+添加技能到档案: POST /profiles/freelancer/me/skills (已提供)。
+获取公共技能库供选择: GET /skills/ (已提供)。
+缺失接口: 无明显缺失。
+freelancer/EditSkill.vue (编辑技能)
+
+主要功能: 修改已添加技能的熟练度、经验、证书等信息。
+后端接口覆盖:
+更新个人技能信息: PUT /profiles/freelancer/me/skills/{skill_id} (已提供)。
+(获取技能详情用于编辑，可从 MySkills 列表传递或重新请求，现有接口是针对列表的)。
+缺失接口: 无明显缺失。
+freelancer/MyWallet.vue (我的钱包 - 零工)
+
+主要功能: 显示余额、冻结资金、交易明细、提现功能、收入分析。
+后端接口覆盖: 后端暂未提供钱包相关接口。
+缺失接口:
+获取钱包余额及明细接口。
+提现申请接口。
+获取交易记录接口。
+(可选) 收入统计分析接口。
+freelancer/MyReviews.vue (我收到的评价 - 零工)
+
+主要功能: 查看雇主对自己的评价列表。
+后端接口覆盖: 后端暂未提供专门获取用户收到评价的接口。 Order API 的 OrderOutput 模型没有直接嵌入评价详情，但订单完成后应有评价环节。
+缺失接口:
+获取用户收到的评价列表接口 (区分零工/雇主)。
+评价申诉接口 (需求提及)。
+freelancer/Verification.vue (零工认证)
+
+主要功能: 提交个人实名认证资料、查看认证状态和记录。
+后端接口覆盖:
+提交认证申请: POST /verifications/submit (已提供, profile_type: 'freelancer')。
+查看我的认证记录: GET /verifications/me (可按 profile_type 筛选, 已提供)。
+缺失接口: 无明显缺失。
+4. 雇主 (Employer) 特定模块 (需登录，雇主角色)
+employer/Dashboard.vue (雇主工作台)
+
+主要功能: 数据概览（发布岗位数、收到申请数）、快捷入口（发布工作、查看申请）。
+后端接口覆盖: 后端暂未提供专门的统计聚合接口。
+缺失接口:
+雇主工作台数据统计接口。
+employer/PostJob.vue (发布工作)
+
+主要功能: 填写工作表单（类型、标题、地点、时间、薪资、人数、描述、技能要求）、费用预估、发布。
+后端接口覆盖:
+发布新工作: POST /jobs/ (已提供)。
+(可选) 为工作添加技能要求: POST /jobs/{job_id}/required_skills (发布后操作，或集成到发布流程中)。
+获取公共技能库供选择技能要求: GET /skills/ (已提供)。
+缺失接口:
+(可选) 保存工作草稿接口。
+(可选) 工作描述AI辅助接口。
+(可选) 薪资建议接口。
+employer/EditJob.vue (编辑工作)
+
+主要功能: 修改已发布工作的各项信息。
+后端接口覆盖:
+获取工作详情以编辑: GET /jobs/{job_id} (已提供)。
+更新工作信息: PUT /jobs/{job_id} (已提供)。
+管理工作技能要求: POST /jobs/{job_id}/required_skills, DELETE /jobs/{job_id}/required_skills/{skill_id} (已提供)。
+缺失接口: 无明显缺失。
+employer/MyPostedJobs.vue (我发布的工作)
+
+主要功能: 列表展示已发布的工作、状态、查看申请、编辑、删除、关闭招聘、复制。
+后端接口覆盖:
+获取我发布的工作列表: GET /jobs/my_posted (已提供)。
+删除工作: DELETE /jobs/{job_id} (已提供)。
+关闭招聘: POST /jobs/{job_id}/close (已提供)。
+复制工作: POST /jobs/{job_id}/duplicate (已提供)。
+缺失接口: 无明显缺失。
+employer/JobApplicants.vue (查看工作申请)
+
+主要功能: 列表展示某个职位收到的申请、申请人信息、申请留言、处理申请（接受/拒绝）。
+后端接口覆盖:
+获取工作申请列表: GET /job_applications/jobs/{job_id}/list (已提供)。
+查看申请详情: GET /job_applications/{application_id} (已提供)。
+处理申请: PUT /job_applications/{application_id}/process (已提供)。
+缺失接口: 无明显缺失。
+employer/MyOrders.vue (我的订单 - 雇主视角)
+
+主要功能: 列表展示已发起的订单、订单状态、订单详情、执行订单操作（确认完成、支付）。
+后端接口覆盖:
+获取我的订单列表 (雇主): GET /orders/ (通过 role 参数区分，已提供)。
+获取订单详情: GET /orders/{order_id} (已提供)。
+执行订单操作: POST /orders/{order_id}/actions (已提供，例如雇主 confirm_completion)。
+支付: 后端支付接口暂未直接体现在 Order API 中，通常支付会跳转到第三方支付或有专门支付网关接口。需求文档提及集成微信、支付宝。
+缺失接口:
+订单支付接口 (创建支付订单、查询支付状态等)。
+电子发票服务接口 (需求提及)。
+employer/ProfileEdit.vue (雇主档案编辑)
+
+主要功能: 创建/编辑雇主详细档案（个人/企业类型、真实姓名/公司名、头像/Logo、昵称、地区、联系方式、企业资质信息等）。
+后端接口覆盖:
+获取雇主档案: GET /profiles/employer/me (已提供)。
+创建/更新雇主档案: PUT /profiles/employer/me (已提供)。
+缺失接口: 无明显缺失。
+employer/MyWallet.vue (我的钱包 - 雇主)
+
+主要功能: 余额（用于支付）、充值、交易明细、发票管理。
+后端接口覆盖: 后端暂未提供钱包相关接口。
+缺失接口:
+获取钱包余额及明细接口。
+充值接口。
+获取交易记录接口。
+发票申请/管理接口。
+employer/MyReviews.vue (我收到的评价 - 雇主)
+
+主要功能: 查看零工对自己的评价列表。
+后端接口覆盖: 同零工的评价，后端暂未提供专门获取用户收到评价的接口。
+缺失接口:
+获取用户收到的评价列表接口。
+评价申诉接口。
+employer/Verification.vue (雇主认证)
+
+主要功能: 提交个人或企业认证资料、查看认证状态和记录。
+后端接口覆盖:
+提交认证申请: POST /verifications/submit (已提供, profile_type: 'employer_individual' 或 'employer_company')。
+查看我的认证记录: GET /verifications/me (可按 profile_type 筛选, 已提供)。
+缺失接口: 无明显缺失。
+总结后端暂未提供的关键接口：
+短信验证码服务: 注册、忘记密码、更换手机号等场景都需要。
+第三方登录: 获取授权URL、回调处理、绑定/解绑。
+忘记密码流程: 发送重置验证码、通过验证码重置密码。
+内容管理/静态信息获取: 首页轮播图、政策指南、平台介绍、帮助中心等。除非这些是纯前端写死，否则需要后台管理和接口。
+用户行为追踪: 收藏工作、分享计数等。
+消息通知系统: 获取列表、未读数、标记已读、删除。
+钱包与支付: 余额、明细、提现(零工)、充值(雇主)、支付订单创建与状态查询、发票。
+评价系统: 获取用户收到的评价列表、评价申诉。
+统计聚合数据: 各角色工作台的统计数据（如收入、订单数、申请数）。
+AI辅助功能: 工作描述生成、薪资建议（如果不在前端实现）。
+草稿箱功能: 保存未完成的工作发布。
+部分用户中心功能: 修改手机号、绑定/解绑第三方账号。
+(可能) 身份动态切换: 如果用户有双重身份，在会话中切换主要操作角色。
+三、各页面详细设计 (面向接口开发)
+此处将选择几个核心页面进行详细设计举例。
+
+示例1: job/JobSearch.vue (工作广场)
+页面目标: 用户可以浏览、搜索和筛选平台上的所有开放工作。
+主要UI组件:
+搜索栏 (输入框、搜索按钮)。
+筛选面板 (可折叠):
+工作类型 (多选标签或下拉)。
+区域 (省市区联动选择、"附近"按钮触发定位)。
+薪资范围 (滑块或输入框)。
+发布时间/工作时间 (日期选择器、预设选项如“今天”、“本周”)。
+排序方式 (下拉选择：最新发布、离我最近、薪资最高等)。
+重置筛选按钮。
+工作列表区域:
+工作卡片 (循环展示 JobOutput 数据)。
+分页组件。
+(可选) 地图视图切换按钮及地图展示区域。
+数据状态 (Vuex/Pinia 或组件内 ref/reactive):
+jobsList: 数组，存储从后端获取的工作列表。
+pagination: 对象，存储分页信息 (page, per_page, total_items, total_pages)。
+filters: 对象，存储当前激活的筛选条件 (如 q, job_category, location_city, salary_min 等)。
+isLoading:布尔值，表示数据加载状态。
+error: 字符串或对象，存储API请求错误信息。
+currentSort: 字符串，当前排序方式。
+主要方法/逻辑:
+WorkspaceJobs():
+触发: 页面加载、筛选条件变化、分页变化、排序变化。
+动作:
+设置 isLoading 为 true。
+组合 filters, pagination.page, pagination.per_page, currentSort 等参数。
+调用后端接口: axios.get('/api/v1/jobs', { params: combinedParams })。
+成功回调:
+更新 jobsList 为响应中的 items。
+更新 pagination 为响应中的 pagination。
+设置 isLoading 为 false。
+失败回调:
+设置 error 信息。
+设置 isLoading 为 false。
+handleFilterChange(newFilters): 更新 filters 状态，重置 pagination.page 为1，然后调用 WorkspaceJobs()。
+handlePageChange(newPage): 更新 pagination.page，调用 WorkspaceJobs()。
+handleSortChange(newSort): 更新 currentSort，调用 WorkspaceJobs()。
+MapsToJobDetail(jobId): 使用 router.push({ name: 'JobDetail', params: { id: jobId } })。
+getNearbyJobs(): (如果使用地图或“附近”功能)
+获取用户当前地理位置 (HTML5 Geolocation API)。
+将经纬度设置到 filters 中，并可能设置 radius_km。
+调用 WorkspaceJobs()。
+生命周期钩子:
+mounted(): 调用 WorkspaceJobs() 初始化加载数据。
+watch: 监听 filters, pagination.page, currentSort 的变化，重新获取数据（也可以通过事件驱动）。
+后端接口依赖:
+GET /jobs/: 核心接口，用于获取工作列表和筛选。参数对应 job_list_parser。
+(可选) GET /skills/: 如果工作类型筛选与技能相关联，可能需要获取技能列表作为筛选选项。
+示例2: employer/PostJob.vue (发布工作)
+页面目标: 雇主可以填写并提交新的工作信息。
+主要UI组件:
+表单 (<el-form> 或类似):
+工作标题 (<el-input>)。
+工作描述 (<el-input type="textarea">)。
+工作类别 (<el-select> 或 <el-cascader>)。
+工作标签 (<el-select multiple> 或自定义标签输入组件)。
+详细地址 (<el-input>)，省市区 (<el-cascader>)。
+(可选) 地图选点按钮。
+(可选) 经纬度输入 (如果前端直接提供)。
+开始/结束时间 (<el-date-picker type="datetimerange">)。
+薪资金额 (<el-input-number>)。
+计薪方式 (<el-select>)。
+薪资是否可议 (<el-switch>)。
+需求人数 (<el-input-number>)。
+技能要求描述 (<el-input type="textarea">) 或选择技能 (<el-select multiple>)。
+是否急聘 (<el-switch>)。
+报名截止时间 (<el-date-picker type="datetime">)。
+提交按钮、保存草稿按钮 (如果实现)。
+数据状态:
+jobForm: 对象，绑定表单各字段数据，对应 JobCreationInput 模型。
+isLoading: 布尔值，提交状态。
+error: 提交错误信息。
+skillOptions: 数组，从 /skills/ 获取的技能选项 (如果技能要求是选择式的)。
+jobCategories: 数组，工作类别选项。
+主要方法/逻辑:
+handleSubmit():
+触发: 点击“发布”按钮。
+动作:
+前端表单校验。
+如果校验通过，设置 isLoading 为 true。
+准备提交数据 payload (可能需要处理 location_point，如果前端输入的是经纬度)。
+调用后端接口: axios.post('/api/v1/jobs', payload)。
+成功回调:
+提示发布成功。
+跳转到 MyPostedJobs 页面或新发布的工作详情页。
+重置表单。
+设置 isLoading 为 false。
+失败回调:
+设置 error (显示错误提示)。
+设置 isLoading 为 false。
+handleSaveDraft(): (如果实现)
+触发: 点击“保存草稿”按钮。
+动作: 调用后端保存草稿接口。
+WorkspaceSkills(): (如果技能要求是选择式的)
+调用 axios.get('/api/v1/skills') 获取技能选项，填充 skillOptions。
+WorkspaceJobCategories(): 获取工作类别数据填充 jobCategories (可能来自固定列表或后端接口)。
+(可选) 地图选点逻辑，更新表单中的地址和经纬度。
+生命周期钩子:
+mounted(): 调用 WorkspaceSkills() (如果需要), WorkspaceJobCategories()。
+后端接口依赖:
+POST /jobs/: 核心接口，用于创建新工作，对应 job_creation_input_model。
+GET /skills/: 获取技能列表，用于“技能要求”选择。
+(缺失) 获取工作分类接口 (如果不是固定的)。
+(缺失) 保存工作草稿接口。
+示例3: freelancer/MyOrders.vue (我的订单 - 零工视角)
+页面目标: 零工查看和管理自己已接受的订单。
+主要UI组件:
+订单列表区域:
+筛选器 (按订单状态: pending_start, in_progress, pending_confirmation, completed, cancelled 等)。
+订单卡片 (循环展示 OrderOutput 数据):
+工作标题 (链接到工作详情)。
+雇主信息。
+订单金额。
+计划开始/结束时间。
+实际开始/结束时间。
+订单状态。
+操作按钮 (根据状态显示不同操作，如“开始工作”、“完成工作”、“确认工时”等)。
+分页组件。
+订单详情模态框/页面 (可选，如果列表信息不足)。
+数据状态:
+ordersList: 数组，存储订单。
+pagination: 分页信息。
+filters: 对象，存储当前订单状态筛选。
+isLoading: 布尔值。
+error: 错误信息。
+主要方法/逻辑:
+WorkspaceOrders():
+触发: 页面加载、筛选条件变化、分页变化。
+动作:
+设置 isLoading 为 true。
+组合参数: page, per_page, status: filters.status, role: 'freelancer'。
+调用后端接口: axios.get('/api/v1/orders', { params: combinedParams })。
+成功回调: 更新 ordersList 和 pagination。
+失败回调: 设置 error。
+最终设置 isLoading 为 false。
+handleAction(orderId, action, payload):
+触发: 点击订单卡片上的操作按钮。
+动作:
+准备请求体: { action: action, ...payload } (例如 payload 可以包含 cancellation_reason 或 start_time_actual, end_time_actual)。
+调用后端接口: axios.post(/api/v1/orders/${orderId}/actions, requestBody)。
+成功回调:
+提示操作成功。
+刷新订单列表 (WorkspaceOrders()) 或局部更新该订单状态。
+失败回调: 显示错误提示。
+updateActualTimes(orderId, startTime, endTime):
+触发: (如果单独提供更新实际工时功能)
+动作: 调用 axios.put(/api/v1/orders/${orderId}/actual_times, { start_time_actual: startTime, end_time_actual: endTime })。
+成功后刷新列表或更新订单。
+viewOrderDetail(orderId): 跳转到订单详情页或打开模态框显示更多信息 (可调用 GET /orders/{order_id} )。
+生命周期钩子:
+mounted(): 调用 WorkspaceOrders()。
+后端接口依赖:
+GET /orders/: 获取零工的订单列表。
+GET /orders/{order_id}: 获取单个订单详情。
+POST /orders/{order_id}/actions: 执行订单操作。
+PUT /orders/{order_id}/actual_times: 更新实际工时。
+四、前端状态管理 (Vuex/Pinia)
+建议使用状态管理库来管理全局状态，例如：
+
+auth module:
+user: 当前登录用户信息 (UserPublicOutput)。
+accessToken: JWT。
+isAuthenticated: 布尔值。
+currentRole: 当前用户操作角色 (freelancer 或 employer)。
+Actions: login, register, logout, WorkspaceCurrentUser。
+profile module (可按角色拆分):
+freelancerProfile: 零工档案 (FreelancerProfileOutput)。
+employerProfile: 雇主档案 (EmployerProfileOutput)。
+Actions: WorkspaceFreelancerProfile, updateFreelancerProfile, WorkspaceEmployerProfile, updateEmployerProfile。
+job module:
+jobs: 工作广场的列表。
+jobDetail: 当前查看的工作详情。
+myPostedJobs: 雇主发布的列表。
+Actions: searchJobs, getJobById, createJob, updateJob, etc.
+application module:
+myApplications: 零工的申请列表。
+jobApplicants: 某工作的申请人列表。
+Actions: applyForJob, WorkspaceMyApplications, WorkspaceJobApplicants, processApplication, cancelApplication.
+order module:
+myOrders: 当前用户的订单列表。
+Actions: WorkspaceMyOrders, processOrderAction.
+skill module:
+publicSkills: 公共技能库。
+mySkills: 零工的技能列表。
+Actions: WorkspaceAllSkills, WorkspaceMySkills, addSkillToFreelancer, etc.
+verification module:
+myVerifications: 用户的认证记录。
+Actions: submitVerification, WorkspaceMyVerifications.
+ui module (可选):
+isLoadingGlobal: 全局加载状态。
+notifications: 弹窗通知。
+五、组件库和UI设计
+根据需求文档中 "6. 界面与交互设计" 的详细描述，采用相应的颜色、字体、组件样式。
+公共组件 (components/common):
+AppHeader.vue
+AppFooter.vue
+AppSidebar.vue (用户中心)
+JobCard.vue
+OrderCard.vue
+ApplicationCard.vue
+SkillTag.vue
+FilterPanel.vue
+Pagination.vue
+FileUpload.vue (用于头像、认证资料、营业执照等)
+MapViewer.vue (集成地图服务)
+响应式设计: 确保在PC和移动端（如果需求文档中强调）都有良好体验。UI库通常自带响应式支持。
+六、开发和协作流程建议
+API 优先对接: 前端根据已有的后端API文档优先开发已覆盖的功能模块。
+Mock Server/Data: 对于后端暂未提供的接口，前端可以使用 msw, json-server 或在代码中 mock 数据，以便并行开发UI和业务逻辑。
+接口联调: 后端接口开发完成后，及时进行前后端联调。
+组件化开发: 将页面拆分为可复用的组件。
+代码规范和审查: 统一代码风格 (ESLint, Prettier)，进行 Code Review。
+版本控制: 使用 Git。
+状态管理: 尽早引入 Vuex/Pinia，规范数据流。
+错误处理: 统一的API请求错误处理机制 (如 Axios 拦截器)，友好地向用户展示错误信息。
+加载状态: 在数据请求时提供明确的加载指示 (loading spinners, skeletons)。
+通过以上详细设计，前端团队可以清晰地了解每个页面的功能、所需数据、依赖的后端接口以及需要优先与后端沟通的缺失接口。这为面向接口的开发奠定了坚实的基础。
