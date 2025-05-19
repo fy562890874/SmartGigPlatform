@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["src/**/*.ts", "src/**/*.vue", "src/**/*.d.ts", "tests/**/*.ts"],
+  "compilerOptions": {
+    "types": ["vitest/globals"],
+    "esModuleInterop": true
+  }
+}
