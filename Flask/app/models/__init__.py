@@ -2,6 +2,8 @@
 # Import all models here to make them accessible via app.models.<ModelName>
 # Also ensures SQLAlchemy detects them for migrations.
 
+from app.core.extensions import db
+
 from .user import User
 from .profile import FreelancerProfile, EmployerProfile
 from .job import Job, JobApplication
