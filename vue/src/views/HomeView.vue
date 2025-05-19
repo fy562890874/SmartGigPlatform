@@ -243,8 +243,9 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import apiClient from '@/utils/apiClient' // Ensure apiClient is correctly configured
-import JobCard from '@/components/JobCard.vue' // Assuming you have a JobCard component
+import apiClient from '@/utils/apiClient'
+import { getPaginatedData } from '@/utils/http'
+import JobCard from '@/components/JobCard.vue'
 import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
 import {
   Search, Briefcase, User, Plus, Document, Promotion, Platform, Setting, TrendCharts, MessageBox, DataAnalysis,
@@ -323,9 +324,19 @@ const performSearch = () => {
 }
 
 const userAvatar = computed(() => {
-  // Assuming user object has an avatar_url property
-  // And a profile object might be nested: user.profile?.avatar_url
-  return authStore.user?.avatar_url || authStore.user?.profile?.avatar_url || '' // Fallback to default or empty
+  // 增加更多防御性检查，处理多种可能的用户数据结构
+  if (!authStore.user) return '';
+  
+  // 使用类型断言来处理可能的不同用户对象结构
+  const user = authStore.user as any;
+  
+  // 尝试从多种可能的路径获取头像URL
+  const avatarUrl = user.avatar_url || 
+                   (user.profile && user.profile.avatar_url) || 
+                   '';
+  
+  console.log('用户头像URL:', avatarUrl);
+  return avatarUrl;
 })
 
 const handleUserCommand = (command: string) => {
@@ -377,26 +388,21 @@ const loadingFeaturedJobs = ref(false)
 const fetchFeaturedJobs = async () => {
   loadingFeaturedJobs.value = true;
   try {
-    const response = await apiClient.get('jobs', {
-      params: {
-        status: 'active',
-        sort_by: 'created_at_desc',
+    // 使用后端真正支持的查询参数
+    const response = await apiClient.get('/jobs', { 
+      params: { 
+        per_page: 6,
         page: 1,
-        per_page: 6, // 首页只展示6个热门工作
-        is_urgent: true // 优先展示紧急招聘
-      }
+        sort_by: 'created_at_desc', // 按创建时间倒序排列
+        status: 'open', // 只获取开放状态的工作
+        is_urgent: true // 可以优先显示紧急工作
+      } 
     });
-
-    // apiClient已处理成功响应
-    featuredJobs.value = response.data.items.map((job: Job) => ({
-      ...job,
-      company_name_display: job.employer_info?.name || `雇主 #${job.employer_user_id}`,
-      salary_range_display: `${job.salary_amount}${job.salary_type === 'fixed' ? '元' : '元/' + job.salary_type} ${job.salary_negotiable ? '(可议)' : ''}`,
-    }));
+    const { items = [] } = getPaginatedData(response);
+    featuredJobs.value = items as Job[];
   } catch (error) {
-    console.error('获取推荐职位失败:', error);
-    featuredJobs.value = [];
-    // 错误已由apiClient处理
+    console.error('获取热门工作失败:', error);
+    featuredJobs.value = []; // 确保出错时设置为空数组
   } finally {
     loadingFeaturedJobs.value = false;
   }

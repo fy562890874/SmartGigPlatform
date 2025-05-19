@@ -60,12 +60,15 @@ class SkillListResource(Resource):
         # Remove None filters to avoid passing them to service if they mean "don't filter"
         active_filters = {k: v for k, v in filters.items() if v is not None}
 
+        current_app.logger.info(f"接收到的过滤参数: {active_filters}")
+
         try:
             paginated_skills = skill_service.get_all_skills(
                 filters=active_filters,
                 page=args.get('page'),
                 per_page=args.get('per_page')
             )
+            current_app.logger.info(f"查询到的技能数量: {len(paginated_skills.items)}")
             items_data = SkillSchema(many=True).dump(paginated_skills.items)
             return api_success_response({
                 'items': items_data,
@@ -87,10 +90,11 @@ class SkillCategoriesResource(Resource):
     def get(self):
         """获取所有唯一的技能分类列表"""
         try:
-            # 调用服务方法获取所有技能分类
             categories = skill_service.get_all_skill_categories()
+            current_app.logger.info(f"查询到的技能分类数量: {len(categories)}")
             return api_success_response({"categories": categories})
         except BusinessException as e:
+            current_app.logger.error(f"业务异常: {str(e)}")
             raise e
         except Exception as e:
             current_app.logger.error(f"获取技能分类失败: {str(e)}")

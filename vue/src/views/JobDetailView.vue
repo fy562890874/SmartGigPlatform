@@ -171,6 +171,7 @@ interface Job {
 
 interface JobApplicationCreationInput {
   application_message?: string;
+  expected_salary?: number;
 }
 
 interface JobApplicationOutput {
@@ -198,12 +199,14 @@ const authStore = useAuthStore();
 const job = ref<Job | null>(null);
 const loading = ref(true);
 const applying = ref(false); 
+const submittingApplication = ref(false); 
 const hasApplied = ref(false); 
+const currentApplication = ref<JobApplicationOutput | null>(null);
 
 const applyModalVisible = ref(false);
-const submittingApplication = ref(false);
 const applicationForm = reactive<JobApplicationCreationInput>({
   application_message: '',
+  expected_salary: undefined,
 });
 const applicationFormRef = ref<InstanceType<typeof ElForm>>();
 
@@ -211,43 +214,25 @@ const jobId = computed(() => {
   return Number(route.params.id);
 });
 
-const fetchJobDetails = async () => {
-  if (!jobId.value || isNaN(jobId.value)) {
-    ElMessage.error('无效的工作ID');
-    loading.value = false;
-    return;
-  }
-  loading.value = true;
-  try {
-    const response = await apiClient.get(`jobs/${jobId.value}`);
-    job.value = response.data;
-    
-    if (authStore.isLoggedIn) {
-      await checkApplicationStatus();
-    }
-  } catch (error: any) {
-    console.error('获取工作详情失败:', error);
-    job.value = null;
-    // 错误已由apiClient处理
-  } finally {
-    loading.value = false;
-  }
-};
+const error = ref<string | null>(null);
 
-const checkApplicationStatus = async () => {
-  if (!authStore.isLoggedIn || !job.value) return;
-  applying.value = true;
+const fetchJobDetails = async () => {
+  loading.value = true;
+  error.value = null;
+  
   try {
-    const response = await apiClient.get('job-applications/check', {
-      params: { job_id: job.value.id }
-    });
-    
-    hasApplied.value = response.data.has_applied;
-  } catch (error) {
-    console.error('检查申请状态失败:', error);
-    // 错误已由apiClient处理
+    job.value = await apiClient.get(`/jobs/${jobId.value}`);
+      // 检查是否已申请该工作
+    if (authStore.isLoggedIn && authStore.user?.current_role === 'freelancer') {
+      const applicationResponse = await apiClient.get(`/job-applications/check?job_id=${jobId.value}`);
+      hasApplied.value = !!applicationResponse?.has_applied;
+      currentApplication.value = applicationResponse?.application || null;
+    }
+  } catch (err: any) {
+    console.error('获取工作详情失败:', err);
+    error.value = err.message || '加载工作详情失败';
   } finally {
-    applying.value = false;
+    loading.value = false;
   }
 };
 
@@ -281,26 +266,37 @@ const handleApplyJob = () => {
 };
 
 const submitApplication = async () => {
-  if (!applicationFormRef.value) return;
-  await applicationFormRef.value.validate(async (valid) => {
-    if (valid && job.value) {
-      submittingApplication.value = true;
-      try {
-        const response = await apiClient.post(`job-applications/jobs/${job.value.id}/apply`, applicationForm);
-        
-        ElMessage.success('申请已成功提交！');
-        hasApplied.value = true;
-        applyModalVisible.value = false;
-      } catch (error) {
-        console.error('提交申请失败:', error);
-        // 错误已由apiClient处理
-      } finally {
-        submittingApplication.value = false;
-      }
-    } else {
-      ElMessage.warning('请填写必要的申请信息。');
-    }
-  });
+  if (!authStore.isLoggedIn) {
+    ElMessage.warning('请先登录再申请工作');
+    router.push('/login');
+    return;
+  }
+  
+  if (authStore.user?.current_role !== 'freelancer') {
+    ElMessage.warning('请切换为零工角色后再申请工作');
+    return;
+  }
+  
+  submittingApplication.value = true;
+  try {
+    const applicationData = {
+      job_id: jobId.value,
+      message: applicationForm.application_message,
+      expected_salary: applicationForm.expected_salary || undefined
+    };
+    
+    const response = await apiClient.post('/job-applications', applicationData);
+    
+    ElMessage.success('工作申请已成功提交');
+    hasApplied.value = true;
+    currentApplication.value = response || null;
+    applyModalVisible.value = false;
+  } catch (err: any) {
+    console.error('提交工作申请失败:', err);
+    ElMessage.error(err.message || '提交申请失败，请稍后重试');
+  } finally {
+    submittingApplication.value = false;
+  }
 };
 
 const goBack = () => {

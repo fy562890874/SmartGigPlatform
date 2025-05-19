@@ -3,13 +3,18 @@ from ..models.user import User
 from ..core.extensions import db # Assuming db is your SQLAlchemy instance
 from ..core.extensions import bcrypt # Only if User model doesn't handle hashing
 from flask_jwt_extended import create_access_token
-from ..utils.exceptions import AuthenticationException, InvalidUsageException, NotFoundException, BusinessException
+from ..utils.exceptions import NotFoundException, InvalidUsageException, BusinessException, AuthorizationException, AuthenticationException
 import uuid # For generating UUIDs, if needed for new users
 from datetime import datetime # For last_login_at, registered_at
 from flask import current_app # For logging
 import re # For phone number validation
+import os
+from werkzeug.utils import secure_filename
 
 class UserService:
+
+    def __init__(self):
+        pass
 
     @staticmethod
     def register(phone_number, password, user_type, nickname=None):
@@ -23,102 +28,127 @@ class UserService:
         # We will focus on login_user called by the API.
         pass
 
-    def register_user(self, data):
+    def register_user(self, phone_number, password, user_type='freelancer'):
         """
-        用户注册服务
-        :param data: 包含 phone_number, password, 和可选的 user_type 的字典
-        :return: 创建的 User 对象
-        :raises: InvalidUsageException, BusinessException
+        注册新用户
+        :param phone_number: 手机号
+        :param password: 密码
+        :param user_type: 用户类型，默认为零工
+        :return: (user, token) 注册成功的用户对象和JWT token
+        :raises: BusinessException
         """
-        phone_number = data.get('phone_number')
-        password = data.get('password')
-        user_type = data.get('user_type', 'freelancer')
-
+        # 验证输入
         if not phone_number or not password:
-            raise InvalidUsageException("手机号和密码不能为空")
-
-        if not re.match(r"^1\d{10}$", phone_number): # Changed from ^1\\\\d{10}$
-            raise InvalidUsageException("无效的手机号码格式")
-
+            raise BusinessException("手机号和密码不能为空")
+        
         if len(password) < 6:
-            raise InvalidUsageException("密码长度至少为6位")
-
+            raise BusinessException("密码长度不能少于6个字符")
+        
+        # 检查手机号是否已存在
         if User.query.filter_by(phone_number=phone_number).first():
-            raise BusinessException("该手机号已被注册", status_code=409)
-
-        hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
-
+            raise BusinessException("该手机号已被注册")
+        
+        # 验证用户类型
+        if user_type not in ['freelancer', 'employer']:
+            user_type = 'freelancer'  # 默认为零工
+        
+        # 创建用户
         new_user = User(
-            # Assuming User model has a uuid field, uncomment if so
-            # uuid=str(uuid.uuid4()),
+            uuid=str(uuid.uuid4()),
             phone_number=phone_number,
-            password_hash=hashed_password, # Ensure User model has 'password_hash' field
+            password_hash=bcrypt.generate_password_hash(password).decode('utf-8'),
             current_role=user_type,
-            available_roles=[user_type], # Initialize available_roles with the current role
-            status='active', # Default status
-            registered_at=datetime.utcnow()
+            available_roles=[user_type],
+            status='active',
+            registered_at=datetime.datetime.now(datetime.timezone.utc)
         )
-
+        
         try:
             db.session.add(new_user)
             db.session.commit()
-            # db.session.refresh(new_user) # Optional: to get ID if auto-generated and needed immediately
-            return new_user
+            
+            # 创建访问令牌
+            access_token = create_access_token(identity=str(new_user.uuid))
+            
+            return new_user, access_token
         except Exception as e:
             db.session.rollback()
-            current_app.logger.error(f"Error during user registration: {str(e)}")
-            raise BusinessException("注册过程中发生错误，请重试")
+            current_app.logger.error(f"用户注册失败: {str(e)}")
+            raise BusinessException("用户注册失败")
 
     def login_user(self, phone_number, password):
         """
-        用户登录服务
-        :param phone_number: User's phone number
-        :param password: User's password
-        :return: Tuple (User object, access_token)
-        :raises: AuthenticationException, InvalidUsageException
+        用户登录
+        :param phone_number: 手机号
+        :param password: 密码
+        :return: (user, token) 登录成功的用户对象和JWT token
+        :raises: AuthenticationException, BusinessException
         """
+        # 验证输入
         if not phone_number or not password:
-            raise InvalidUsageException("手机号和密码不能为空")
-
+            raise BusinessException("手机号和密码不能为空")
+        
+        # 查找用户
         user = User.query.filter_by(phone_number=phone_number).first()
-
-        # Ensure User model has 'password_hash' field and 'status' field
-        if user and user.password_hash and bcrypt.check_password_hash(user.password_hash, password):
-            if getattr(user, 'status', 'active') == 'inactive': # Or 'banned', etc.
-                raise AuthenticationException("账号已被禁用")
-
-            user.last_login_at = datetime.utcnow()
-            try:
-                db.session.add(user)
-                db.session.commit()
-            except Exception as e:
-                db.session.rollback()
-                current_app.logger.error(f"Error updating last_login_at for user {user.id if hasattr(user, 'id') else phone_number}: {str(e)}")
-                # Continue with login even if last_login_at update fails
-
-            # 统一使用uuid作为身份标识
-            if not hasattr(user, 'uuid') or not user.uuid:
-                # 如果用户没有uuid，生成一个并保存
-                user.uuid = str(uuid.uuid4())
-                try:
-                    db.session.commit()
-                    current_app.logger.info(f"Generated and saved new UUID for user {user.id}: {user.uuid}")
-                except Exception as e:
-                    db.session.rollback()
-                    current_app.logger.error(f"Failed to save generated UUID: {str(e)}")
-                    # 继续使用临时生成的UUID
-            
-            # 创建令牌时统一使用uuid
-            access_token = create_access_token(identity=str(user.uuid))
-            return user, access_token
-        else:
-            raise AuthenticationException("手机号或密码错误")
+        if not user:
+            raise AuthenticationException("用户不存在或密码错误")
+        
+        # 验证密码
+        if not bcrypt.check_password_hash(user.password_hash, password):
+            raise AuthenticationException("用户不存在或密码错误")
+        
+        # 检查账户状态
+        if user.status != 'active':
+            raise AuthenticationException("账户已被禁用")
+        
+        # 更新最后登录时间
+        user.last_login_at = datetime.datetime.now(datetime.timezone.utc)
+        db.session.commit()
+        
+        # 创建访问令牌，使用UUID作为身份标识
+        access_token = create_access_token(identity=str(user.uuid))
+        
+        return user, access_token
 
     def get_user_by_id(self, user_id):
-        user = User.query.get(user_id)
+        """
+        根据ID或UUID获取用户
+        :param user_id: 用户ID或UUID
+        :return: 用户对象
+        :raises: NotFoundException
+        """
+        # 检查是否为UUID格式
+        try:
+            if isinstance(user_id, str) and len(user_id) > 10:
+                # 可能是UUID，尝试验证格式
+                uuid_obj = uuid.UUID(user_id)
+                user = User.query.filter_by(uuid=str(uuid_obj)).first()
+            else:
+                # 尝试作为数字ID处理
+                user = User.query.get(user_id)
+        except ValueError:
+            # 如果UUID格式验证失败，尝试作为普通ID
+            user = User.query.get(user_id)
+        
         if not user:
             raise NotFoundException(f"User with ID {user_id} not found.")
         return user
+
+    def get_user_by_uuid(self, user_uuid):
+        """
+        通过UUID获取用户
+        :param user_uuid: 用户UUID字符串
+        :return: 用户对象
+        :raises: NotFoundException
+        """
+        try:
+            user = User.query.filter_by(uuid=user_uuid).first()
+            if not user:
+                raise NotFoundException(f"User with UUID {user_uuid} not found.")
+            return user
+        except Exception as e:
+            current_app.logger.error(f"获取用户失败: {str(e)}")
+            raise NotFoundException(f"Failed to find user with UUID {user_uuid}")
 
     # Placeholder for update_profile, assuming it will be part of a more general UserProfileService later
     # For now, let's add a simple nickname update here if needed by a basic User API
@@ -151,58 +181,80 @@ class UserService:
     # would also go here.
 
     def change_password(self, user_id, old_password, new_password):
-        user = self.get_user_by_id(user_id)
-        if not bcrypt.check_password_hash(user.password_hash, old_password):
-            raise InvalidUsageException(message="旧密码不正确。", error_code=40002)
+        """
+        修改用户密码
+        :param user_id: 用户ID
+        :param old_password: 旧密码
+        :param new_password: 新密码
+        :raises: NotFoundException, AuthenticationException, BusinessException
+        """
+        if not old_password or not new_password:
+            raise BusinessException("旧密码和新密码不能为空")
+        
         if len(new_password) < 6:
-            raise InvalidUsageException(message="新密码长度不能少于6位。", error_code=40003)
+            raise BusinessException("新密码长度不能少于6个字符")
+        
+        # 获取用户
+        user = self.get_user_by_id(user_id)
+        
+        # 验证旧密码
+        if not bcrypt.check_password_hash(user.password_hash, old_password):
+            raise AuthenticationException("旧密码不正确")
+        
+        # 更新密码
         user.password_hash = bcrypt.generate_password_hash(new_password).decode('utf-8')
-        try:
-            db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f"修改密码失败: {str(e)}")
-            raise BusinessException(message="修改密码时发生错误", internal_message=str(e))
-        return user # Or None/True depending on desired return
+        db.session.commit()
+        
+        return True
 
-    def switch_role(self, user_id, new_role):
+    def update_user(self, user_id, data):
+        """
+        更新用户基本信息
+        :param user_id: 用户ID
+        :param data: 要更新的数据
+        :return: 更新后的用户对象
+        :raises: NotFoundException, BusinessException
+        """
+        if not data:
+            raise BusinessException("请求数据不能为空")
+        
+        # 获取用户
+        user = self.get_user_by_id(user_id)
+        
+        # 更新可修改的字段
+        allowed_fields = ['email', 'nickname']
+        
+        for field in allowed_fields:
+            if field in data:
+                setattr(user, field, data[field])
+        
+        db.session.commit()
+        
+        return user
+
+    def switch_role(self, user_id, role):
         """
         切换用户当前角色
-        :param user_id: 从JWT中获取的用户ID
-        :param new_role: 要切换到的新角色
+        :param user_id: 用户ID
+        :param role: 要切换的角色
         :return: 更新后的用户对象
-        :raises: InvalidUsageException, NotFoundException, BusinessException
+        :raises: NotFoundException, BusinessException
         """
-        user = self.get_user_by_id(user_id)  # 这会在用户不存在时抛出NotFoundException
+        if not role:
+            raise BusinessException("角色不能为空")
         
-        # 验证新角色是否是用户可用角色之一
-        if new_role not in user.available_roles:
-            raise InvalidUsageException(
-                message=f"无效的角色切换请求: '{new_role}' 不是用户的可用角色之一", 
-                error_code=40004
-            )
+        # 获取用户
+        user = self.get_user_by_id(user_id)
         
-        # 验证新角色是否是有效的主要角色
-        if new_role not in ['freelancer', 'employer']:
-            raise InvalidUsageException(
-                message=f"目标角色 '{new_role}' 无效。只允许切换到 'freelancer' 或 'employer'", 
-                error_code=40005
-            )
+        # 检查角色是否可用
+        if role not in user.available_roles:
+            raise BusinessException(f"用户没有 {role} 角色权限")
         
-        # 如果角色相同，则无需切换
-        if user.current_role == new_role:
-            return user
+        # 更新当前角色
+        user.current_role = role
+        db.session.commit()
         
-        # 执行角色切换
-        user.current_role = new_role
-        try:
-            db.session.commit()
-            current_app.logger.info(f"用户 {user_id} 成功切换到角色: {new_role}")
-            return user
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f"切换用户 {user_id} 角色失败: {str(e)}")
-            raise BusinessException(message="切换用户角色时发生错误", internal_message=str(e))
+        return user
 
     def get_public_user_profile_by_uuid(self, user_uuid):
         """
@@ -228,6 +280,28 @@ class UserService:
         except Exception as e:
             current_app.logger.error(f"查找用户UUID失败: {str(e)}")
             raise BusinessException(message="获取用户公开信息失败", internal_message=str(e))
+
+    def user_to_dict(self, user):
+        """
+        将User对象转换为字典，用于API响应
+        :param user: User对象
+        :return: 用户信息字典
+        """
+        if not user:
+            return None
+        
+        return {
+            'id': user.id,
+            'uuid': user.uuid,
+            'phone_number': user.phone_number,
+            'email': user.email,
+            'nickname': user.nickname if hasattr(user, 'nickname') else None,
+            'current_role': user.current_role,
+            'available_roles': user.available_roles,
+            'status': user.status,
+            'last_login_at': user.last_login_at.isoformat() if user.last_login_at else None,
+            'registered_at': user.registered_at.isoformat() if user.registered_at else None
+        }
 
 # Instantiate the service for easy import
 user_service = UserService()

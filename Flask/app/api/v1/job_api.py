@@ -376,3 +376,33 @@ class JobRequiredSkillDetailResource(Resource):
             raise e
         except Exception as e:
             raise BusinessException(message=f"移除工作技能要求失败: {str(e)}", status_code=500)
+
+@ns.route('/categories')
+class JobCategoriesResource(Resource):
+    @ns.response(200, '获取工作类别列表成功', model=ns.model('JobCategoriesResponse', {
+        'categories': fields.List(fields.String(description='工作类别'))
+    }))
+    @ns.doc(description="获取系统中所有可用的工作类别")
+    def get(self):
+        """获取可用的工作类别列表"""
+        try:
+            # 从job_service获取所有可用的工作类别
+            categories = job_service.get_all_job_categories()
+            return api_success_response({'categories': categories})
+        except Exception as e:
+            raise BusinessException(message=f"获取工作类别列表失败: {str(e)}", status_code=500)
+
+@ns.route('/tags')
+class JobTagsResource(Resource):
+    @ns.response(200, '获取工作标签列表成功', model=ns.model('JobTagsResponse', {
+        'tags': fields.List(fields.String(description='工作标签'))
+    }))
+    @ns.doc(description="获取系统中所有可用的工作标签")
+    def get(self):
+        """获取可用的工作标签列表"""
+        try:
+            # 从job_service获取所有可用的工作标签
+            tags = job_service.get_all_job_tags()
+            return api_success_response({'tags': tags})
+        except Exception as e:
+            raise BusinessException(message=f"获取工作标签列表失败: {str(e)}", status_code=500)

@@ -13,6 +13,18 @@
             <el-radio-button label="completed">已完成</el-radio-button>
             <el-radio-button label="cancelled">已取消</el-radio-button>
           </el-radio-group>
+          
+          <!-- 开发环境测试工具 -->
+          <div class="debug-tools" v-if="isDev">
+            <el-button 
+              type="warning" 
+              size="small" 
+              @click="createTestOrder" 
+              :loading="creatingTestOrder"
+            >
+              创建测试订单
+            </el-button>
+          </div>
         </div>
       </template>
 
@@ -87,11 +99,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
-import { useRouter } from 'vue-router';
-import axios from 'axios';
+import { ref, reactive, onMounted, watch, computed } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { Search } from '@element-plus/icons-vue';
 import { useAuthStore } from '@/stores/auth';
+import apiClient from '@/utils/apiClient';
+import { getPaginatedData } from '@/utils/http';
 import dayjs from 'dayjs';
 
 const router = useRouter();
@@ -105,6 +119,8 @@ const pageSize = ref(10);
 const totalItems = ref(0);
 const statusFilter = ref('');
 const currentUserRole = ref('');
+const isDev = ref(process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost');
+const creatingTestOrder = ref(false);
 
 // 计算属性
 const isEmployer = computed(() => {
@@ -115,63 +131,90 @@ const isEmployer = computed(() => {
 const fetchOrders = async () => {
   loading.value = true;
   try {
-    const token = authStore.token;
-    if (!token) {
-      ElMessage.error('您尚未登录或登录已过期');
-      router.push('/login');
-      return;
+    // 确保有用户角色
+    if (!currentUserRole.value && authStore.user) {
+      currentUserRole.value = authStore.user.current_role || '';
     }
-
-    // 确定当前用户角色
-    if (!currentUserRole.value) {
-      if (authStore.user?.current_role) {
-        currentUserRole.value = authStore.user.current_role;
-      } else {
-        // 尝试从 available_roles 中确定，优先使用 employer
-        const availableRoles = authStore.user?.available_roles || [];
-        if (availableRoles.includes('employer')) {
-          currentUserRole.value = 'employer';
-        } else if (availableRoles.includes('freelancer')) {
-          currentUserRole.value = 'freelancer';
-        } else {
-          ElMessage.error('无法确定您的角色，请先设置角色');
-          router.push('/settings');
-          return;
-        }
-      }
+    
+    // 启用调试模式
+    const isDebug = localStorage.getItem('debug_mode') === 'true' || true; // 临时强制开启调试
+    
+    // 记录用户和角色信息
+    if (isDebug) {
+      console.log('===== 订单列表请求开始 =====');
+      console.log('当前用户:', authStore.user);
+      console.log('当前角色:', currentUserRole.value);
     }
-
-    // 构建请求参数
-    const params: any = {
+    
+    const params: Record<string, string | number> = {
       page: currentPage.value,
       per_page: pageSize.value,
       role: currentUserRole.value,
     };
-
+    
     // 如果有状态筛选
     if (statusFilter.value) {
       params.status = statusFilter.value;
     }
-
-    // 发送请求
-    const response = await axios.get('http://127.0.0.1:5000/api/v1/orders', {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      },
-      params
+    
+    // 移除空值
+    Object.keys(params).forEach((key) => {
+      const typedKey = key as keyof typeof params;
+      if (params[typedKey] === undefined || params[typedKey] === '') {
+        delete params[typedKey];
+      }
     });
-
-    // 处理响应
-    if (response.data && response.data.code === 0) {
-      const data = response.data.data;
-      orders.value = data.items || [];
-      totalItems.value = data.total_items || 0;
-    } else {
-      ElMessage.error(response.data?.message || '获取订单列表失败');
+    
+    if (isDebug) {
+      console.log('请求参数:', params);
+      console.log('请求路径: /orders');
+      console.log('Authorization Header:', authStore.token ? '已设置' : '未设置');
     }
+    
+    // 调用API并处理标准响应格式
+    const response = await apiClient.get('/orders', { params });
+    
+    // 将数据传入调试模式
+    if (isDebug) {
+      console.log('OrderListView 收到的订单数据:', response);
+    }
+    
+    // 使用辅助函数正确处理分页数据
+    const { items = [], pagination: paginationData = { total_items: 0, total: 0 } } = getPaginatedData(response);
+    
+    if (isDebug) {
+      console.log('getPaginatedData 处理后的数据:', { items, pagination: paginationData });
+      console.log('===== 订单列表请求结束 =====');
+    }
+    
+    orders.value = Array.isArray(items) ? items : [];
+    // 确保获取正确的总数
+    totalItems.value = paginationData.total_items || paginationData.total || (Array.isArray(items) ? items.length : 0);
   } catch (error: any) {
     console.error('获取订单列表失败:', error);
-    ElMessage.error(error.response?.data?.message || '获取订单列表失败，请稍后重试');
+    // 针对特定错误进行处理
+    if (error.response?.status === 401) {
+      ElMessage.error('登录已过期，请重新登录');
+      authStore.logout();
+      router.push('/login');
+    } else if (error.response?.status === 500) {
+      // 服务器错误，尝试提取详细信息
+      const errorResponse = error.response.data;
+      const errorMessage = errorResponse?.message || '服务器内部错误';
+      
+      // 显示更友好的错误消息
+      ElMessage({
+        type: 'error',
+        message: `获取订单列表失败: ${errorMessage}`,
+        duration: 5000,
+        showClose: true
+      });
+      
+      console.error('服务器错误详情:', errorResponse);
+    } else {
+      ElMessage.error(error.response?.data?.message || '获取订单列表失败，请稍后再试');
+    }
+    orders.value = [];
   } finally {
     loading.value = false;
   }
@@ -239,8 +282,14 @@ const formatDateTime = (dateStr: string | null | undefined) => {
 // 订单操作函数
 const startWork = async (orderId: number) => {
   try {
-    const confirmed = await ElMessageBox.confirm('确定要开始这项工作吗？', '开始工作', {
-      confirmButtonText: '确定',
+    // 确保用户角色正确
+    if (currentUserRole.value !== 'freelancer') {
+      ElMessage.warning('只有零工身份可以开始工作');
+      return;
+    }
+    
+    const confirmed = await ElMessageBox.confirm('确定要开始这项工作吗？开始后状态将变为进行中。', '开始工作', {
+      confirmButtonText: '确定开始',
       cancelButtonText: '取消',
       type: 'info'
     });
@@ -254,6 +303,12 @@ const startWork = async (orderId: number) => {
 };
 
 const completeWork = (orderId: number) => {
+  // 确保用户角色正确
+  if (currentUserRole.value !== 'freelancer') {
+    ElMessage.warning('只有零工身份可以完成工作');
+    return;
+  }
+  
   router.push({
     path: `/orders/${orderId}`,
     query: { action: 'complete_work' }
@@ -262,7 +317,13 @@ const completeWork = (orderId: number) => {
 
 const confirmCompletion = async (orderId: number) => {
   try {
-    const confirmed = await ElMessageBox.confirm('确认工作已完成且符合要求吗？', '确认完成', {
+    // 确保用户角色正确
+    if (currentUserRole.value !== 'employer') {
+      ElMessage.warning('只有雇主身份可以确认完成订单');
+      return;
+    }
+    
+    const confirmed = await ElMessageBox.confirm('确认工作已完成且符合要求吗？确认后将支付给零工。', '确认完成', {
       confirmButtonText: '确认完成',
       cancelButtonText: '取消',
       type: 'success'
@@ -279,8 +340,7 @@ const confirmCompletion = async (orderId: number) => {
 // 执行订单操作的通用函数
 const performOrderAction = async (orderId: number, action: string, additionalData = {}) => {
   try {
-    const token = authStore.token;
-    if (!token) {
+    if (!authStore.isLoggedIn) {
       ElMessage.error('您尚未登录或登录已过期');
       router.push('/login');
       return;
@@ -291,27 +351,48 @@ const performOrderAction = async (orderId: number, action: string, additionalDat
       ...additionalData
     };
 
-    const response = await axios.post(
-      `http://127.0.0.1:5000/api/v1/orders/${orderId}/actions`,
-      payload,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-
-    if (response.data && response.data.code === 0) {
-      ElMessage.success('操作成功');
-      // 刷新订单列表
-      fetchOrders();
-    } else {
-      ElMessage.error(response.data?.message || '操作失败');
-    }
+    // 直接使用 apiClient 发送请求
+    await apiClient.post(`/orders/${orderId}/actions`, payload);
+    
+    ElMessage.success('操作成功');
+    // 刷新订单列表
+    fetchOrders();
   } catch (error: any) {
     console.error('订单操作失败:', error);
-    ElMessage.error(error.response?.data?.message || '操作失败，请稍后重试');
+    
+    // 根据错误状态码提供更具体的错误信息
+    if (error.response?.status === 409) {
+      ElMessage.error(error.response?.data?.message || '操作与当前订单状态冲突');
+    } else if (error.response?.status === 403) {
+      ElMessage.error('您无权执行此操作');
+    } else if (error.response?.status === 404) {
+      ElMessage.error('订单不存在或已被删除');
+    } else if (error.response?.status === 400) {
+      ElMessage.error(error.response?.data?.message || '请求参数错误');
+    } else {
+      ElMessage.error(error.response?.data?.message || '操作失败，请稍后重试');
+    }
+  }
+};
+
+// 创建测试订单（仅开发环境使用）
+const createTestOrder = async () => {
+  if (!isDev.value) return;
+  
+  creatingTestOrder.value = true;
+  try {
+    const response = await apiClient.post('/orders/debug/create-test-order');
+    
+    ElMessage.success('测试订单创建成功!');
+    console.log('测试订单创建成功:', response);
+    
+    // 刷新订单列表
+    fetchOrders();
+  } catch (error: any) {
+    console.error('创建测试订单失败:', error);
+    ElMessage.error(error.response?.data?.message || '创建测试订单失败');
+  } finally {
+    creatingTestOrder.value = false;
   }
 };
 
@@ -321,6 +402,15 @@ onMounted(() => {
     ElMessage.warning('请先登录');
     router.push('/login');
     return;
+  }
+  
+  // 获取当前用户角色
+  if (authStore.user && authStore.user.current_role) {
+    currentUserRole.value = authStore.user.current_role;
+  } else {
+    // 如果用户没有设置角色，默认尝试使用 freelancer
+    currentUserRole.value = 'freelancer';
+    console.warn('用户未设置角色，默认使用freelancer角色获取订单');
   }
   
   fetchOrders();
@@ -345,6 +435,15 @@ onMounted(() => {
 .card-header span {
   font-size: 1.2em;
   font-weight: bold;
+}
+
+/* 增加调试工具样式 */
+.debug-tools {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  padding-left: 15px;
+  border-left: 1px dashed #ddd;
 }
 
 .loading-state {

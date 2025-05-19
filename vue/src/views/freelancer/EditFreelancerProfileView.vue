@@ -345,52 +345,54 @@ const portfolioRules = {
 const fetchFreelancerProfile = async () => {
   loading.profile = true;
   try {
-    const response = await apiClient.get('profiles/freelancer/me');
-    
-    // 填充基本信息表单
-    const profileData = response.data;
+    const profileData = await apiClient.get('profiles/freelancer/me');
     
     // 基本信息
-    profileForm.basic.real_name = profileData.real_name || '';
-    profileForm.basic.nickname = profileData.nickname || '';
-    profileForm.basic.gender = profileData.gender || '';
-    profileForm.basic.birth_date = profileData.birth_date || '';
-    profileForm.basic.contact_email = profileData.contact_email || '';
-    profileForm.basic.contact_phone = profileData.contact_phone || '';
-    profileForm.basic.location_province = profileData.location_province || '';
-    profileForm.basic.location_city = profileData.location_city || '';
-    profileForm.basic.location_district = profileData.location_district || '';
-    profileForm.basic.location_address = profileData.location_address || '';
-    profileForm.basic.avatar_url = profileData.avatar_url || '';
+    profileForm.basic.real_name = profileData?.real_name || '';
+    profileForm.basic.nickname = profileData?.nickname || '';
+    profileForm.basic.gender = profileData?.gender || '';
+    profileForm.basic.birth_date = profileData?.birth_date || '';
+    profileForm.basic.contact_email = profileData?.contact_email || '';
+    profileForm.basic.contact_phone = profileData?.contact_phone || '';
+    profileForm.basic.location_province = profileData?.location_province || '';
+    profileForm.basic.location_city = profileData?.location_city || '';
+    profileForm.basic.location_district = profileData?.location_district || '';
+    profileForm.basic.location_address = profileData?.location_address || '';
+    profileForm.basic.avatar_url = profileData?.avatar_url || '';
     
     // 个人简介
-    profileForm.bio.bio = profileData.bio || '';
+    profileForm.bio.bio = profileData?.bio || '';
     
     // 工作偏好
-    profileForm.preferences.availability = profileData.availability || '';
-    profileForm.preferences.hourly_rate = profileData.hourly_rate || 0;
+    profileForm.preferences.availability = profileData?.availability || '';
+    profileForm.preferences.hourly_rate = profileData?.hourly_rate || 0;
     
     // 尝试解析工作偏好JSON
     try {
-      if (profileData.work_preferences && typeof profileData.work_preferences === 'string') {
-        const workPreferences = JSON.parse(profileData.work_preferences);
-        profileForm.preferences.preferred_job_types = workPreferences.preferred_job_types || [];
-        profileForm.preferences.available_hours = workPreferences.available_hours || [];
-        profileForm.preferences.work_preferences_note = workPreferences.note || '';
-      } else if (profileData.work_preferences && typeof profileData.work_preferences === 'object') {
-        profileForm.preferences.preferred_job_types = profileData.work_preferences.preferred_job_types || [];
-        profileForm.preferences.available_hours = profileData.work_preferences.available_hours || [];
-        profileForm.preferences.work_preferences_note = profileData.work_preferences.note || '';
+      if (profileData?.work_preferences) {
+        let workPreferences;
+        
+        if (typeof profileData.work_preferences === 'string') {
+          workPreferences = JSON.parse(profileData.work_preferences);
+        } else if (typeof profileData.work_preferences === 'object') {
+          workPreferences = profileData.work_preferences;
+        }
+        
+        if (workPreferences) {
+          profileForm.preferences.preferred_job_types = workPreferences.preferred_job_types || [];
+          profileForm.preferences.available_hours = workPreferences.available_hours || [];
+          profileForm.preferences.work_preferences_note = workPreferences.note || '';
+        }
       }
     } catch (e) {
       console.error('解析工作偏好失败:', e);
     }
     
     // 作品与链接
-    profileForm.portfolio.personal_website_url = profileData.personal_website_url || '';
-    profileForm.portfolio.linkedin_url = profileData.linkedin_url || '';
-    profileForm.portfolio.github_url = profileData.github_url || '';
-    profileForm.portfolio.portfolio_links = profileData.portfolio_links || [];
+    profileForm.portfolio.personal_website_url = profileData?.personal_website_url || '';
+    profileForm.portfolio.linkedin_url = profileData?.linkedin_url || '';
+    profileForm.portfolio.github_url = profileData?.github_url || '';
+    profileForm.portfolio.portfolio_links = profileData?.portfolio_links || [];
     
   } catch (error) {
     console.error('获取零工档案失败:', error);
@@ -422,7 +424,7 @@ const uploadAvatar = async (options: any) => {
     });
     
     // 更新头像URL
-    profileForm.basic.avatar_url = response.data.avatar_url;
+    profileForm.basic.avatar_url = response?.avatar_url || '';
     ElMessage.success('头像上传成功');
     onSuccess(response);
   } catch (error) {

@@ -228,9 +228,9 @@
 <script setup lang="ts">
 import { ref, onMounted, reactive, computed } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import axios from 'axios';
 import { ElMessage, ElMessageBox, FormInstance } from 'element-plus';
 import { useAuthStore } from '@/stores/auth';
+import apiClient from '@/utils/apiClient';
 import dayjs from 'dayjs';
 import OrderActionPanel from '@/components/order/OrderActionPanel.vue';
 import OrderTimeUpdateModal from '@/components/order/OrderTimeUpdateModal.vue';
@@ -243,9 +243,10 @@ const authStore = useAuthStore();
 const defaultAvatar = 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png';
 
 // 状态变量
-const orderId = Number(route.params.orderId || 0);
+const orderId = ref(Number(route.params.orderId || 0));
 const loading = ref(true);
 const order = ref<any>(null);
+const jobApplication = ref<any>(null);
 const currentUserRole = ref('');
 const openWorkTimeModal = ref(false);
 const cancelDialogVisible = ref(false);
@@ -254,53 +255,79 @@ const cancelForm = reactive({
 });
 const cancelFormRef = ref<FormInstance>();
 const submitting = ref(false);
+const actionLoading = ref(false);
 
 // 获取订单详情
-const fetchOrderDetail = async () => {
+const fetchOrderDetails = async () => {
+  if (!orderId.value) return;
+  
   loading.value = true;
   try {
-    const token = authStore.token;
-    if (!token) {
-      ElMessage.error('您尚未登录或登录已过期');
-      router.push('/login');
-      return;
+    // 获取当前用户角色
+    if (authStore.user && authStore.user.current_role) {
+      currentUserRole.value = authStore.user.current_role;
     }
-
-    // 确定当前用户角色
-    if (!currentUserRole.value) {
-      if (authStore.user?.current_role) {
-        currentUserRole.value = authStore.user.current_role;
-      } else {
-        // 尝试从 available_roles 中确定，优先使用 employer
-        const availableRoles = authStore.user?.available_roles || [];
-        if (availableRoles.includes('employer')) {
-          currentUserRole.value = 'employer';
-        } else if (availableRoles.includes('freelancer')) {
-          currentUserRole.value = 'freelancer';
+    
+    // 设置调试模式
+    const isDebug = localStorage.getItem('debug_mode') === 'true';
+    
+    // 获取订单详情
+    const orderData = await apiClient.get(`/orders/${orderId.value}`);
+    
+    if (isDebug) {
+      console.log('OrderDetailView 收到的订单数据:', orderData);
+    }
+    
+    if (orderData) {
+      // 检查数据格式，如果是数组或包含items数组，则取第一个元素
+      if (Array.isArray(orderData)) {
+        if (orderData.length > 0) {
+          order.value = orderData[0];
+          if (isDebug) {
+            console.log('从数组中提取第一个订单:', order.value);
+          }
         } else {
-          ElMessage.error('无法确定您的角色，请先设置角色');
-          router.push('/settings');
-          return;
+          throw new Error('未找到订单数据');
+        }
+      } else if (orderData.items && Array.isArray(orderData.items) && orderData.items.length > 0) {
+        order.value = orderData.items[0];
+        if (isDebug) {
+          console.log('从items数组中提取第一个订单:', order.value);
+        }
+      } else {
+        // 直接使用对象
+        order.value = orderData;
+      }
+      
+      // 获取关联的工作申请
+      if (order.value.application_id) {
+        try {
+          const applicationData = await apiClient.get(`/job-applications/${order.value.application_id}`);
+          jobApplication.value = applicationData;
+          
+          if (isDebug) {
+            console.log('获取到关联的工作申请:', jobApplication.value);
+          }
+        } catch (appError: any) {
+          console.warn('获取关联工作申请失败:', appError);
+          // 这不是致命错误，可以继续
         }
       }
-    }
-
-    // 发送请求
-    const response = await axios.get(`http://127.0.0.1:5000/api/v1/orders/${orderId}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-
-    // 处理响应
-    if (response.data && response.data.code === 0) {
-      order.value = response.data.data;
     } else {
-      ElMessage.error(response.data?.message || '获取订单详情失败');
+      ElMessage.error('获取订单详情失败：无效的响应数据');
+      router.push('/orders');
     }
   } catch (error: any) {
     console.error('获取订单详情失败:', error);
-    ElMessage.error(error.response?.data?.message || '获取订单详情失败，请稍后重试');
+    if (error.response?.status === 404) {
+      ElMessage.error('订单不存在或已被删除');
+      router.push('/orders');
+    } else if (error.response?.status === 403) {
+      ElMessage.error('您无权访问此订单');
+      router.push('/orders');
+    } else {
+      ElMessage.error(error.response?.data?.message || error.message || '获取订单详情失败');
+    }
   } finally {
     loading.value = false;
   }
@@ -378,7 +405,7 @@ const getTimelineColor = (phase: string) => {
 
 // 事件处理函数
 const handleActionPerformed = () => {
-  fetchOrderDetail(); // 重新获取订单数据
+  fetchOrderDetails(); // 重新获取订单数据
 };
 
 // 打开取消订单对话框
@@ -399,7 +426,7 @@ const confirmCancelOrder = async () => {
 
     submitting.value = true;
     try {
-      await performOrderAction(orderId, 'cancel_order', { cancellation_reason: cancelForm.reason });
+      await handleOrderAction('cancel_order', { cancellation_reason: cancelForm.reason });
       cancelDialogVisible.value = false;
     } finally {
       submitting.value = false;
@@ -407,9 +434,11 @@ const confirmCancelOrder = async () => {
   });
 };
 
-// 执行订单操作的通用函数
-const performOrderAction = async (orderId: number, action: string, additionalData = {}) => {
+// 处理订单操作
+const handleOrderAction = async (action: string, additionalData = {}) => {
   try {
+    actionLoading.value = true;
+    
     const token = authStore.token;
     if (!token) {
       ElMessage.error('您尚未登录或登录已过期');
@@ -421,28 +450,27 @@ const performOrderAction = async (orderId: number, action: string, additionalDat
       action,
       ...additionalData
     };
-
-    const response = await axios.post(
-      `http://127.0.0.1:5000/api/v1/orders/${orderId}/actions`,
-      payload,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-
-    if (response.data && response.data.code === 0) {
-      ElMessage.success('操作成功');
-      // 刷新订单详情
-      fetchOrderDetail();
-    } else {
-      ElMessage.error(response.data?.message || '操作失败');
-    }
+    
+    // 直接使用 apiClient 的封装方法
+    const result = await apiClient.post(`/orders/${orderId.value}/actions`, payload);
+    
+    ElMessage.success('操作成功');
+    fetchOrderDetails(); // 刷新订单详情
   } catch (error: any) {
-    console.error('订单操作失败:', error);
-    ElMessage.error(error.response?.data?.message || '操作失败，请稍后重试');
+    console.error(`处理订单${action}操作失败:`, error);
+    
+    // 针对不同错误类型处理
+    if (error.response?.status === 409) {
+      ElMessage.error(error.response?.data?.message || '操作与当前订单状态冲突');
+    } else if (error.response?.status === 403) {
+      ElMessage.error('您无权执行此操作');
+    } else if (error.response?.status === 400) {
+      ElMessage.error(error.response?.data?.message || '请求参数错误');
+    } else {
+      ElMessage.error(error.response?.data?.message || '操作失败，请稍后重试');
+    }
+  } finally {
+    actionLoading.value = false;
   }
 };
 
@@ -454,13 +482,13 @@ onMounted(() => {
     return;
   }
 
-  if (!orderId) {
+  if (!orderId.value) {
     ElMessage.error('未指定订单ID');
     router.push('/my-orders');
     return;
   }
 
-  fetchOrderDetail();
+  fetchOrderDetails();
 
   // 检查URL参数，若有action=complete_work，则打开工作时间模态框
   if (route.query.action === 'complete_work') {

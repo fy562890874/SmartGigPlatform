@@ -168,8 +168,9 @@ class JobService:
                 if filters.get(field):
                     filter_conditions.append(getattr(Job, field) == filters[field])
             
-            if filters.get('is_urgent') is not None:
-                 filter_conditions.append(Job.is_urgent == filters['is_urgent'])
+            is_urgent_filter_value = filters.get('is_urgent')
+            if is_urgent_filter_value is not None:
+                filter_conditions.append(Job.is_urgent.is_(is_urgent_filter_value))
 
             if filters.get('salary_min'):
                 filter_conditions.append(Job.salary_amount >= filters['salary_min'])
@@ -475,5 +476,46 @@ class JobService:
         except Exception as e:
             db.session.rollback()
             raise BusinessException(message=f"移除工作技能要求失败: {str(e)}", status_code=500, error_code=50001)
+
+    def get_all_job_categories(self):
+        """
+        获取系统中所有可用的工作类别
+        :return: 工作类别列表
+        """
+        try:
+            # 从 Job 表中查询并去重所有使用中的类别
+            current_app.logger.info("[JobService] 开始查询所有工作类别")
+            categories = db.session.query(Job.job_category).distinct().all()
+            current_app.logger.info(f"[JobService] 查询结果: {categories}")
+
+            # 将查询结果转换为字符串列表
+            categories_list = [category[0] for category in categories]
+            current_app.logger.info(f"[JobService] 转换后的类别列表: {categories_list}")
+
+            return sorted(categories_list) # 按字母顺序排序
+        except Exception as e:
+            current_app.logger.error(f"[JobService] 查询工作类别时发生错误: {str(e)}")
+            raise BusinessException(message=f"获取工作类别失败: {str(e)}", status_code=500)
+
+    def get_all_job_tags(self):
+        """
+        获取系统中所有使用的工作标签
+        :return: 工作标签列表
+        """
+        try:
+            # Job.job_tags是JSON数组，需要从中提取所有唯一标签
+            jobs_with_tags = db.session.query(Job.job_tags).filter(Job.job_tags.is_not(None)).all()
+            
+            # 先提取所有标签列表，然后去重
+            all_tags = set()
+            for job_tags in jobs_with_tags:
+                if job_tags[0]: # 确保不是None
+                    for tag in job_tags[0]:
+                        all_tags.add(tag)
+                        
+            return sorted(list(all_tags)) # 按字母顺序排序
+        except Exception as e:
+            current_app.logger.error(f"[JobService] Error fetching job tags: {str(e)}")
+            raise BusinessException(message=f"获取工作标签失败: {str(e)}", status_code=500)
 
 job_service = JobService()

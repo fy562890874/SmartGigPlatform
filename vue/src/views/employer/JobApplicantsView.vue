@@ -72,7 +72,7 @@
             
             <el-table-column label="期望薪资" min-width="100" align="center">
               <template #default="{ row }">
-                <div v-if="row.expected_salary">{{ row.expected_salary }}元/{{ getSalaryTypeText(job.salary_type) }}</div>
+                <div v-if="row.expected_salary && job">{{ row.expected_salary }}元/{{ getSalaryTypeText(job.salary_type) }}</div>
                 <div v-else>接受发布薪资</div>
               </template>
             </el-table-column>
@@ -111,7 +111,7 @@
                 </el-button>
                 
                 <el-button
-                  v-if="row.status === 'accepted' && job.status === 'active'"
+                  v-if="row.status === 'accepted' && job && job.status === 'active'"
                   type="primary"
                   size="small"
                   @click="createOrder(row)"
@@ -227,10 +227,77 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { ElMessage, FormInstance } from 'element-plus';
+import { ElMessage, FormInstance, FormRules } from 'element-plus';
 import { useAuthStore } from '@/stores/auth';
 import apiClient from '@/utils/apiClient';
+import { getPaginatedData } from '@/utils/http';
 import dayjs from 'dayjs';
+
+// 定义类型接口
+interface Job {
+  id: number;
+  title: string;
+  description: string;
+  employer_user_id: number;
+  required_people: number;
+  accepted_people?: number;
+  status: string;
+  salary_amount: number;
+  salary_type: string;
+  created_at: string;
+  updated_at: string;
+  application_deadline?: string;
+  [key: string]: any;
+}
+
+interface FreelancerProfile {
+  id?: number;
+  user_id: number;
+  nickname?: string;
+  real_name?: string;
+  avatar_url?: string;
+  rating?: number;
+  rating_count?: number;
+  [key: string]: any;
+}
+
+interface JobApplication {
+  id: number;
+  job_id: number;
+  freelancer_user_id: number;
+  status: string;
+  message?: string;
+  expected_salary?: number;
+  created_at: string;
+  updated_at: string;
+  freelancer: FreelancerProfile;
+  [key: string]: any;
+}
+
+interface Pagination {
+  page: number;
+  per_page: number;
+  total: number;
+  total_items?: number;
+}
+
+interface FilterParams {
+  status: string;
+  sort_by: string;
+}
+
+interface ResponseForm {
+  message: string;
+}
+
+interface OrderForm {
+  title: string;
+  amount: number;
+  start_time: string;
+  end_time: string;
+  description: string;
+  job_application_id: number | null;
+}
 
 // 路由与状态管理
 const router = useRouter();
@@ -239,7 +306,7 @@ const authStore = useAuthStore();
 const orderFormRef = ref<FormInstance>();
 
 // 获取路由参数
-const jobId = computed(() => {
+const jobId = computed<number | null>(() => {
   return route.params.id ? parseInt(route.params.id as string) : null;
 });
 
@@ -250,36 +317,36 @@ const loading = reactive({
 });
 
 // 工作信息
-const job = ref(null);
+const job = ref<Job | null>(null);
 
 // 申请者列表
-const applicants = ref([]);
-const pagination = reactive({
+const applicants = ref<JobApplication[]>([]);
+const pagination = reactive<Pagination>({
   page: 1,
   per_page: 10,
   total: 0
 });
 
 // 筛选参数
-const filterParams = reactive({
+const filterParams = reactive<FilterParams>({
   status: '',
   sort_by: 'created_at_desc'
 });
 
 // 对话框控制
-const dialogVisible = ref(false);
-const dialogTitle = ref('');
-const currentAction = ref('');
-const selectedApplicant = ref(null);
-const responseLoading = ref(false);
-const responseForm = reactive({
+const dialogVisible = ref<boolean>(false);
+const dialogTitle = ref<string>('');
+const currentAction = ref<string>('');
+const selectedApplicant = ref<JobApplication | null>(null);
+const responseLoading = ref<boolean>(false);
+const responseForm = reactive<ResponseForm>({
   message: ''
 });
 
 // 订单对话框控制
-const orderDialogVisible = ref(false);
-const orderLoading = ref(false);
-const orderForm = reactive({
+const orderDialogVisible = ref<boolean>(false);
+const orderLoading = ref<boolean>(false);
+const orderForm = reactive<OrderForm>({
   title: '',
   amount: 0,
   start_time: '',
@@ -289,13 +356,11 @@ const orderForm = reactive({
 });
 
 // 订单表单验证规则
-const orderRules = {
+const orderRules: FormRules = {
   title: [
-    { required: true, message: '请输入订单标题', trigger: 'blur' },
     { min: 5, max: 100, message: '标题长度应在5到100个字符之间', trigger: 'blur' }
   ],
   amount: [
-    { required: true, message: '请输入订单金额', trigger: 'blur' },
     { type: 'number', min: 1, message: '金额必须大于0', trigger: 'blur' }
   ],
   start_time: [
@@ -305,29 +370,33 @@ const orderRules = {
     { required: true, message: '请选择结束时间', trigger: 'change' }
   ],
   description: [
-    { required: true, message: '请输入订单说明', trigger: 'blur' },
-    { min: 10, max: 500, message: '说明长度应在10到500个字符之间', trigger: 'blur' }
+    { min: 10, message: '描述至少需要10个字符', trigger: 'blur' }
   ]
 };
 
 // 获取工作详情
-const fetchJobDetails = async () => {
+const fetchJobDetails = async (): Promise<void> => {
   if (!jobId.value) return;
   
   loading.job = true;
   try {
-    const response = await apiClient.get(`jobs/${jobId.value}`);
-    job.value = response.data;
+    const jobData = await apiClient.get(`/jobs/${jobId.value}`);
+    
+    if (jobData) {
+      job.value = jobData;
+    } else {
+      ElMessage.error('获取工作详情失败：无效的响应数据');
+    }
   } catch (error) {
     console.error('获取工作详情失败:', error);
-    ElMessage.error('无法获取工作详情');
+    ElMessage.error('获取工作详情失败');
   } finally {
     loading.job = false;
   }
 };
 
 // 获取申请者列表
-const fetchApplicants = async () => {
+const fetchApplicants = async (): Promise<void> => {
   if (!jobId.value) return;
   
   loading.applicants = true;
@@ -335,130 +404,175 @@ const fetchApplicants = async () => {
     const params = {
       page: pagination.page,
       per_page: pagination.per_page,
-      ...filterParams
+      status: filterParams.status || undefined,
+      sort_by: filterParams.sort_by
     };
     
-    const response = await apiClient.get(`jobs/${jobId.value}/applications`, { params });
+    const response = await apiClient.get(`/jobs/${jobId.value}/applications`, { params });
     
-    applicants.value = response.data.items;
-    pagination.total = response.data.pagination.total_items;
+    const { items = [], pagination: paginationData = {} as { total_items?: number; total?: number } } = getPaginatedData(response);
+    applicants.value = items as JobApplication[];
+    pagination.total = paginationData.total_items || paginationData.total || 0;
+    
+    // 获取工作详情
+    await fetchJobDetails();
   } catch (error) {
     console.error('获取申请者列表失败:', error);
-    ElMessage.error('无法获取申请者列表');
+    ElMessage.error('获取申请者列表失败');
+    applicants.value = [];
   } finally {
     loading.applicants = false;
   }
 };
 
 // 查看零工档案
-const viewProfile = (freelancerId) => {
+const viewProfile = (freelancerId: number): void => {
   router.push(`/freelancers/${freelancerId}`);
 };
 
 // 接受申请者
-const acceptApplicant = (applicant) => {
+const acceptApplicant = (applicant: JobApplication): void => {
   selectedApplicant.value = applicant;
   currentAction.value = 'accept';
   dialogTitle.value = '接受申请';
-  responseForm.message = '';
+  responseForm.message = `您好，我们已接受您的工作申请。`;
   dialogVisible.value = true;
 };
 
 // 拒绝申请者
-const rejectApplicant = (applicant) => {
+const rejectApplicant = (applicant: JobApplication): void => {
   selectedApplicant.value = applicant;
   currentAction.value = 'reject';
   dialogTitle.value = '拒绝申请';
-  responseForm.message = '';
+  responseForm.message = `很抱歉，我们无法接受您的申请。`;
   dialogVisible.value = true;
 };
 
 // 确认回复申请
-const confirmResponse = async () => {
-  if (!selectedApplicant.value) return;
+const confirmResponse = async (): Promise<void> => {
+  if (!selectedApplicant.value) {
+    ElMessage.warning('未选择申请者');
+    return;
+  }
   
   responseLoading.value = true;
   try {
-    const endpoint = `job-applications/${selectedApplicant.value.id}/${currentAction.value === 'accept' ? 'accept' : 'reject'}`;
+    const applicationId = selectedApplicant.value.id;
+    const status = currentAction.value === 'accept' ? 'accepted' : 'rejected';
     
-    await apiClient.post(endpoint, {
-      message: responseForm.message || undefined
+    const response = await apiClient.put(`/job-applications/${applicationId}/status`, {
+      status,
+      message: responseForm.message
     });
     
-    ElMessage.success(`已${currentAction.value === 'accept' ? '接受' : '拒绝'}申请者`);
-    fetchApplicants(); // 刷新列表
-  } catch (error) {
-    console.error('处理申请失败:', error);
+    // 处理响应
+    const responseData = response as any;
+    
+    if (responseData || responseData === null) {
+      ElMessage.success(currentAction.value === 'accept' ? '已接受该申请' : '已拒绝该申请');
+      
+      // 如果是接受申请，更新工作已接受人数
+      if (job.value && currentAction.value === 'accept') {
+        job.value.accepted_people = (job.value.accepted_people || 0) + 1;
+        
+        // 如果已接受人数达到所需人数，提示是否完成工作
+        if (job.value.accepted_people >= job.value.required_people) {
+          ElMessage.info('已达到所需人数，可以考虑将工作标记为已完成');
+        }
+      }
+      
+      // 重新获取申请者列表
+      await fetchApplicants();
+      dialogVisible.value = false;
+    } else {
+      throw new Error('操作申请失败：无效的响应数据');
+    }
+  } catch (error: any) {
+    console.error('操作申请失败:', error);
+    ElMessage.error(`操作失败：${error.message || '请稍后再试'}`);
   } finally {
     responseLoading.value = false;
-    dialogVisible.value = false;
   }
 };
 
 // 创建订单
-const createOrder = (applicant) => {
-  selectedApplicant.value = applicant;
+const createOrder = (applicant: JobApplication): void => {
+  if (!job.value) {
+    ElMessage.warning('无法获取工作信息');
+    return;
+  }
   
-  // 预填订单表单
-  orderForm.title = `${job.value.title} - 订单`;
-  orderForm.amount = applicant.expected_salary || job.value.salary_amount;
-  orderForm.start_time = job.value.start_time;
-  orderForm.end_time = job.value.end_time;
-  orderForm.description = job.value.description;
+  selectedApplicant.value = applicant;
   orderForm.job_application_id = applicant.id;
+  orderForm.title = `${job.value.title} - 订单`;
+  orderForm.amount = job.value.salary_amount;
+  orderForm.description = `为工作"${job.value.title}"创建的订单`;
+  
+  // 设置默认开始和结束时间
+  const now = dayjs();
+  orderForm.start_time = now.format('YYYY-MM-DD HH:mm:ss');
+  orderForm.end_time = now.add(7, 'day').format('YYYY-MM-DD HH:mm:ss');
   
   orderDialogVisible.value = true;
 };
 
 // 提交订单表单
-const submitOrderForm = async () => {
+const submitOrderForm = async (): Promise<void> => {
   if (!orderFormRef.value) return;
   
-  await orderFormRef.value.validate(async (valid) => {
+  await orderFormRef.value.validate(async (valid: boolean) => {
     if (valid) {
       orderLoading.value = true;
       try {
-        await apiClient.post('orders', orderForm);
+        const response = await apiClient.post('/orders', orderForm);
         
-        ElMessage.success('订单创建成功');
-        orderDialogVisible.value = false;
-        fetchApplicants(); // 刷新申请者列表
-      } catch (error) {
+        // 处理响应
+        const responseData = response as any;
+        
+        if (responseData || responseData === null) {
+          ElMessage.success('订单创建成功');
+          orderDialogVisible.value = false;
+          
+          // 重新获取申请者列表
+          await fetchApplicants();
+        } else {
+          throw new Error('创建订单失败：无效的响应数据');
+        }
+      } catch (error: any) {
         console.error('创建订单失败:', error);
+        ElMessage.error(`创建订单失败：${error.message || '请稍后再试'}`);
       } finally {
         orderLoading.value = false;
       }
-    } else {
-      ElMessage.error('请完成必填项并修正表单错误');
     }
   });
 };
 
 // 分页处理
-const handleSizeChange = (val) => {
+const handleSizeChange = (val: number): void => {
   pagination.per_page = val;
   fetchApplicants();
 };
 
-const handleCurrentChange = (val) => {
+const handleCurrentChange = (val: number): void => {
   pagination.page = val;
   fetchApplicants();
 };
 
 // 返回上一页
-const goBack = () => {
+const goBack = (): void => {
   router.back();
 };
 
 // 格式化日期时间
-const formatDateTime = (dateString) => {
+const formatDateTime = (dateString: string): string => {
   if (!dateString) return '';
   return dayjs(dateString).format('YYYY-MM-DD HH:mm');
 };
 
 // 获取状态显示文本
-const getStatusText = (status) => {
-  const statusMap = {
+const getStatusText = (status: string): string => {
+  const statusMap: { [key: string]: string } = {
     pending: '待处理',
     accepted: '已接受',
     rejected: '已拒绝',
@@ -468,8 +582,8 @@ const getStatusText = (status) => {
 };
 
 // 获取状态标签类型
-const getStatusType = (status) => {
-  const typeMap = {
+const getStatusType = (status: string): string => {
+  const typeMap: { [key: string]: string } = {
     pending: 'warning',
     accepted: 'success',
     rejected: 'danger',
@@ -479,8 +593,8 @@ const getStatusType = (status) => {
 };
 
 // 获取薪资类型文本
-const getSalaryTypeText = (type) => {
-  const typeMap = {
+const getSalaryTypeText = (type: string): string => {
+  const typeMap: { [key: string]: string } = {
     fixed: '固定',
     hourly: '小时',
     daily: '天',
@@ -491,23 +605,7 @@ const getSalaryTypeText = (type) => {
 };
 
 // 组件挂载
-onMounted(() => {
-  // 检查用户角色是否为雇主
-  if (!authStore.isLoggedIn || authStore.user?.current_role !== 'employer') {
-    ElMessage.warning('请先以雇主身份登录');
-    router.push('/login');
-    return;
-  }
-  
-  // 检查是否有工作ID
-  if (!jobId.value) {
-    ElMessage.error('无效的工作ID');
-    router.push('/employer/jobs');
-    return;
-  }
-  
-  // 获取工作和申请者信息
-  fetchJobDetails();
+onMounted((): void => {
   fetchApplicants();
 });
 </script>

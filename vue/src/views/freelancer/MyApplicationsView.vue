@@ -147,6 +147,7 @@ import { ref, reactive, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import apiClient from '@/utils/apiClient';
+import { getPaginatedData } from '@/utils/http';
 
 // 路由
 const router = useRouter();
@@ -169,6 +170,12 @@ const filterParams = reactive({
 });
 
 // 获取工作申请列表
+interface PaginationData {
+  total_items?: number;
+  total?: number;
+  total_pages?: number;
+}
+
 const fetchApplications = async () => {
   loading.value = true;
   try {
@@ -176,9 +183,10 @@ const fetchApplications = async () => {
       params: filterParams
     });
     
-    applications.value = response.data.items;
-    totalItems.value = response.data.pagination.total_items;
-    totalPages.value = response.data.pagination.total_pages;
+    const { items = [], pagination: paginationData = {} as PaginationData } = getPaginatedData(response);
+    applications.value = items;
+    totalItems.value = paginationData.total_items || paginationData.total || 0;
+    totalPages.value = paginationData.total_pages || Math.ceil(totalItems.value / filterParams.per_page) || 1;
   } catch (error) {
     console.error('获取工作申请列表失败:', error);
     // 错误已由apiClient处理

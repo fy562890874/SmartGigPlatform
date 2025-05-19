@@ -50,25 +50,46 @@ def init_app(app):
     cache.init_app(app)
     
     # 配置 CORS，允许前端跨域请求访问 API
-    cors.init_app(app, resources={r"/api/*": {"origins": ["http://localhost:3000", "http://127.0.0.1:3000"]}}, 
-                 supports_credentials=True,
-                 allow_headers=["Content-Type", "Authorization", "Accept"],
-                 methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+    cors.init_app(
+        app, 
+        resources={r"/api/*": {"origins": "*"}},
+        supports_credentials=True,
+        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization", "Accept", "X-Requested-With"]
+    )
     
     # Initialize Celery if used
     # global celery
     # celery = make_celery(app)
 
-    # You might want to register error handlers for JWT here, e.g.,
-    # @jwt.expired_token_loader
-    # def expired_token_callback(jwt_header, jwt_payload):
-    #     return jsonify(code=401, message='Token has expired'), 401
-    #
-    # @jwt.invalid_token_loader
-    # def invalid_token_callback(error):
-    #     return jsonify(code=401, message='Signature verification failed'), 401
-    #
-    # @jwt.unauthorized_loader
-    # def missing_token_callback(error):
-    #     return jsonify(code=401, message='Request does not contain an access token'), 401
+    # JWT配置和回调函数
+    from ..services.user_service import user_service
+    from flask import jsonify
+    
+    @jwt.user_lookup_loader
+    def user_lookup_callback(_jwt_header, jwt_data):
+        from ..models.user import User
+        identity = jwt_data["sub"]
+        try:
+            # 尝试通过UUID查找用户
+            return user_service.get_user_by_uuid(identity)
+        except:
+            try:
+                # 尝试通过ID查找用户
+                return user_service.get_user_by_id(identity)
+            except:
+                # 如果找不到用户，返回None
+                return None
+    
+    @jwt.expired_token_loader
+    def expired_token_callback(jwt_header, jwt_payload):
+        return jsonify(code=401, message='Token has expired', data=None), 401
+    
+    @jwt.invalid_token_loader
+    def invalid_token_callback(error):
+        return jsonify(code=401, message='Invalid token', data=None), 401
+    
+    @jwt.unauthorized_loader
+    def missing_token_callback(error):
+        return jsonify(code=401, message='Missing JWT token', data=None), 401
 

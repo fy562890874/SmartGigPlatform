@@ -4,7 +4,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from ...services.user_service import user_service
 from ...schemas.user_schema import UserSchema, UserPublicSchema # For serializing user output and potentially validating updates
-from ...utils.exceptions import BusinessException, InvalidUsageException, NotFoundException
+from ...utils.exceptions import BusinessException, InvalidUsageException, NotFoundException, AuthenticationException
 from ...utils.helpers import api_success_response, api_error_response
 # Assuming user_public_output_model is defined in auth_api or a shared models file
 # For now, let's redefine a similar one or import if it was made sharable.
@@ -33,84 +33,80 @@ class UserSelfResource(Resource):
     @jwt_required()
     @ns.response(200, '成功获取当前用户信息', model=user_public_output_model)
     def get(self):
-        """获取当前登录用户的详细信息"""
-        current_user_id = get_jwt_identity()
+        """获取当前登录用户的信息"""
+        user_id = get_jwt_identity()
+        
         try:
-            user = user_service.get_user_by_id(current_user_id)
-            user_data = UserSchema().dump(user)
-            return api_success_response(user_data)
-        except NotFoundException as e: # Should not happen if JWT identity is valid and user exists
-            raise e
+            user = user_service.get_user_by_id(user_id)
+            return user_service.user_to_dict(user), 200
+        except NotFoundException as e:
+            return {"code": 40401, "message": str(e), "data": None}, 404
         except Exception as e:
-            # Log e
-            raise BusinessException(message="获取用户信息时发生意外错误。", status_code=500, error_code=50001)
+            current_app.logger.error(f"获取用户信息失败: {str(e)}")
+            return {"code": 50001, "message": "服务器内部发生未知错误。", "data": None}, 500
 
     @jwt_required()
     @ns.expect(user_update_input_model)
     @ns.response(200, '用户信息更新成功', model=user_public_output_model)
     def put(self):
-        """更新当前登录用户的信息 (例如: 邮箱)"""
-        current_user_id = get_jwt_identity()
+        """更新当前登录用户的基本信息"""
+        user_id = get_jwt_identity()
         data = request.json
+        
         try:
-            # Basic validation: ensure at least one field is provided for update
-            if not data:
-                raise InvalidUsageException(message="请求体不能为空。")
-            
-            updated_user = user_service.update_user_details(current_user_id, data)
-            user_data = UserSchema().dump(updated_user)
-            return api_success_response(user_data)
-        except (InvalidUsageException, NotFoundException, BusinessException) as e:
-            raise e
+            user = user_service.update_user(user_id, data)
+            return user_service.user_to_dict(user), 200
+        except NotFoundException as e:
+            return {"code": 40401, "message": str(e), "data": None}, 404
+        except BusinessException as e:
+            return {"code": e.code, "message": str(e), "data": None}, 400
         except Exception as e:
-            # Log e
-            raise BusinessException(message="更新用户信息时发生意外错误。", status_code=500, error_code=50001)
+            current_app.logger.error(f"更新用户信息失败: {str(e)}")
+            return {"code": 50001, "message": "服务器内部发生未知错误。", "data": None}, 500
 
 @ns.route('/me/change-password')
 class UserChangePasswordResource(Resource):
     @jwt_required()
     @ns.expect(password_change_input_model)
-    @ns.response(200, '密码修改成功') # No specific model for data, as per API spec (data: null)
+    @ns.response(200, '密码修改成功')
     def post(self):
         """修改当前登录用户的密码"""
-        current_user_id = get_jwt_identity()
+        user_id = get_jwt_identity()
         data = request.json
-        old_password = data.get('old_password')
-        new_password = data.get('new_password')
+        
         try:
-            user_service.change_password(current_user_id, old_password, new_password)
-            return api_success_response(None) # Or {"message": "密码修改成功"} if data should not be null
-        except (InvalidUsageException, NotFoundException, BusinessException) as e:
-            raise e
+            user_service.change_password(user_id, data.get('old_password'), data.get('new_password'))
+            return {"code": 0, "message": "密码修改成功", "data": None}, 200
+        except NotFoundException as e:
+            return {"code": 40401, "message": str(e), "data": None}, 404
+        except AuthenticationException as e:
+            return {"code": 40101, "message": str(e), "data": None}, 401
+        except BusinessException as e:
+            return {"code": e.code, "message": str(e), "data": None}, 400
         except Exception as e:
-            # Log e
-            raise BusinessException(message="修改密码时发生意外错误。", status_code=500, error_code=50001)
+            current_app.logger.error(f"修改密码失败: {str(e)}")
+            return {"code": 50001, "message": "服务器内部发生未知错误。", "data": None}, 500
 
 @ns.route('/me/role')
 class UserCurrentRoleResource(Resource):
     @jwt_required()
     @ns.expect(user_role_update_input)
-    @ns.doc(description="1.3. 切换用户当前角色 (User - Self)")
+    @ns.response(200, '角色切换成功', model=user_public_output_model)
     def put(self):
-        """切换用户当前角色"""
-        current_user_id = get_jwt_identity()
+        """切换当前登录用户的角色"""
+        user_id = get_jwt_identity()
         data = request.json
+        
         try:
-            # 验证输入
-            if not data or 'current_role' not in data:
-                raise InvalidUsageException(message="缺少必要的参数'current_role'")
-            
-            # 调用服务方法切换角色
-            user = user_service.switch_role(current_user_id, data.get('current_role'))
-            
-            # 返回更新后的用户信息
-            user_data = UserSchema().dump(user)
-            return api_success_response(user_data)
-        except (InvalidUsageException, NotFoundException, BusinessException) as e:
-            raise e
+            user = user_service.switch_role(user_id, data.get('current_role'))
+            return user_service.user_to_dict(user), 200
+        except NotFoundException as e:
+            return {"code": 40401, "message": str(e), "data": None}, 404
+        except BusinessException as e:
+            return {"code": e.code, "message": str(e), "data": None}, 400
         except Exception as e:
-            current_app.logger.error(f"切换用户角色失败: {str(e)}")
-            raise BusinessException(message="切换用户角色失败", internal_message=str(e))
+            current_app.logger.error(f"切换角色失败: {str(e)}")
+            return {"code": 50001, "message": "服务器内部发生未知错误。", "data": None}, 500
 
 @ns.route('/<string:user_uuid>')
 @ns.param('user_uuid', '用户的UUID')

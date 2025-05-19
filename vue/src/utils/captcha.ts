@@ -91,3 +91,65 @@ const getRandomColor = (min: number, max: number): string => {
   const b = Math.floor(Math.random() * (max - min) + min);
   return `rgb(${r},${g},${b})`;
 };
+
+/**
+ * 验证码配置接口
+ */
+export interface CaptchaConfig {
+  length?: number;
+  width?: number;
+  height?: number;
+  expiresIn?: number; // 过期时间(秒)
+}
+
+/**
+ * 验证码结果接口
+ */
+export interface CaptchaResult {
+  code: string;
+  imageUrl: string;
+  expireTime: number;
+}
+
+/**
+ * 生成完整的验证码对象
+ * @param config 验证码配置
+ * @returns 验证码结果对象
+ */
+export const generateCaptcha = (config?: CaptchaConfig): CaptchaResult => {
+  const length = config?.length || 4;
+  const width = config?.width || 120;
+  const height = config?.height || 40;
+  const expiresIn = config?.expiresIn || 300; // 默认5分钟
+  
+  const code = generateRandomString(length);
+  const imageUrl = generateCaptchaImage(code, width, height);
+  const expireTime = Date.now() + expiresIn * 1000;
+  
+  return {
+    code,
+    imageUrl,
+    expireTime
+  };
+};
+
+/**
+ * 验证码检验函数
+ * @param userInput 用户输入的验证码
+ * @param captchaCode 正确的验证码
+ * @param ignoreCase 是否忽略大小写
+ * @returns 是否匹配
+ */
+export const validateCaptcha = (userInput: string, captchaResult: CaptchaResult, ignoreCase: boolean = true): boolean => {
+  if (!userInput || !captchaResult.code) return false;
+  
+  // 检查是否过期
+  if (Date.now() > captchaResult.expireTime) return false;
+  
+  // 验证码匹配
+  if (ignoreCase) {
+    return userInput.toLowerCase() === captchaResult.code.toLowerCase();
+  } else {
+    return userInput === captchaResult.code;
+  }
+};

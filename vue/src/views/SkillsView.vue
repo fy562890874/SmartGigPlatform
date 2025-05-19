@@ -107,6 +107,7 @@
 import { ref, reactive, onMounted } from 'vue';
 import { Search } from '@element-plus/icons-vue';
 import apiClient from '@/utils/apiClient';
+import { getPaginatedData } from '@/utils/http';
 
 // 数据结构定义
 interface Skill {
@@ -145,10 +146,11 @@ const pagination = reactive<Pagination>({
 // 获取所有技能分类
 const fetchCategories = async () => {
   try {
-    const response = await apiClient.get('skills/categories');
-    categories.value = response.data.categories || [];
+    const result = await apiClient.get('skills/categories');
+    categories.value = result?.categories || [];
   } catch (error) {
     console.error('获取技能分类失败:', error);
+    categories.value = [];
   }
 };
 
@@ -167,13 +169,16 @@ const fetchSkills = async () => {
     
     const response = await apiClient.get('skills', { params });
     
-    skills.value = response.data.items || [];
-    pagination.page = response.data.pagination.page;
-    pagination.per_page = response.data.pagination.per_page;
-    pagination.total_pages = response.data.pagination.total_pages;
-    pagination.total_items = response.data.pagination.total_items;
+    const { items = [], pagination: paginationData = {} as Pagination } = getPaginatedData<Skill>(response);
+    
+    skills.value = items;
+    pagination.page = paginationData.page || 1;
+    pagination.per_page = paginationData.per_page || 20;
+    pagination.total_pages = paginationData.total_pages || 1;
+    pagination.total_items = paginationData.total_items || 0;
   } catch (error) {
     console.error('获取技能列表失败:', error);
+    skills.value = [];
   } finally {
     loading.value = false;
   }

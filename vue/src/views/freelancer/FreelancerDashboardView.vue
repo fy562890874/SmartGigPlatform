@@ -226,6 +226,7 @@ import { ref, reactive, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import apiClient from '@/utils/apiClient';
+import { getPaginatedData } from '@/utils/http';
 import { 
   Document, ShoppingCart, CircleCheck, Money, EditPen, 
   Star, Lock, Warning, Loading, Location 
@@ -267,7 +268,7 @@ const fetchDashboardData = async () => {
   loading.dashboard = true;
   try {
     const response = await apiClient.get('profiles/freelancer/dashboard');
-    dashboardData.value = response.data;
+    dashboardData.value = response;
   } catch (error) {
     console.error('获取仪表盘数据失败:', error);
   } finally {
@@ -279,10 +280,11 @@ const fetchDashboardData = async () => {
 const fetchRecentApplications = async () => {
   loading.applications = true;
   try {
-    const response = await apiClient.get('job-applications/my', {
-      params: { page: 1, per_page: 5 }
-    });
-    recentApplications.value = response.data.items;
+    const params = { page: 1, per_page: 5 };
+    const response = await apiClient.get('job-applications/my', { params });
+    
+    const { items = [] } = getPaginatedData(response);
+    recentApplications.value = items;
   } catch (error) {
     console.error('获取最近申请失败:', error);
   } finally {
@@ -294,15 +296,16 @@ const fetchRecentApplications = async () => {
 const fetchActiveOrders = async () => {
   loading.orders = true;
   try {
-    const response = await apiClient.get('orders', {
-      params: { 
-        page: 1, 
-        per_page: 5,
-        status: 'active',
-        role: 'freelancer'
-      }
-    });
-    activeOrders.value = response.data.items;
+    const params = { 
+      page: 1, 
+      per_page: 5,
+      status: 'active',
+      role: 'freelancer'
+    };
+    const response = await apiClient.get('orders', { params });
+    
+    const { items = [] } = getPaginatedData(response);
+    activeOrders.value = items;
   } catch (error) {
     console.error('获取进行中订单失败:', error);
   } finally {
@@ -314,10 +317,11 @@ const fetchActiveOrders = async () => {
 const fetchRecommendedJobs = async () => {
   loading.recommendedJobs = true;
   try {
-    const response = await apiClient.get('jobs/recommendations', {
-      params: { count: 6 }
-    });
-    recommendedJobs.value = response.data.items;
+    const params = { count: 6 };
+    const response = await apiClient.get('jobs/recommendations', { params });
+    
+    const { items = [] } = getPaginatedData(response);
+    recommendedJobs.value = items;
   } catch (error) {
     console.error('获取推荐工作失败:', error);
   } finally {

@@ -178,7 +178,30 @@ import { ElMessage } from 'element-plus';
 import { Search } from '@element-plus/icons-vue';
 import { useAuthStore } from '@/stores/auth';
 import apiClient from '@/utils/apiClient';
+import { getPaginatedData } from '@/utils/http';
 import dayjs from 'dayjs';
+
+// 定义类型接口
+interface Job {
+  id: number;
+  title: string;
+  description: string;
+  status: string;
+  created_at: string;
+  salary_amount: number;
+  salary_type: string;
+  application_count?: number;
+  required_people?: number;
+  accepted_people?: number;
+  is_urgent?: boolean;
+  [key: string]: any;
+}
+
+interface Pagination {
+  page: number;
+  per_page: number;
+  total: number;
+}
 
 // 路由与状态管理
 const router = useRouter();
@@ -186,9 +209,9 @@ const route = useRoute();
 const authStore = useAuthStore();
 
 // 工作列表数据
-const jobs = ref([]);
+const jobs = ref<Job[]>([]);
 const loading = ref(false);
-const pagination = reactive({
+const pagination = reactive<Pagination>({
   page: 1,
   per_page: 10,
   total: 0
@@ -205,7 +228,7 @@ const dialogVisible = ref(false);
 const dialogTitle = ref('');
 const dialogMessage = ref('');
 const actionLoading = ref(false);
-const currentJobId = ref(null);
+const currentJobId = ref<number | null>(null);
 const currentAction = ref('');
 
 // 获取雇主发布的工作
@@ -218,11 +241,13 @@ const fetchJobs = async () => {
       ...filterParams
     };
     
-    const response = await apiClient.get('jobs/my-posted', { params });
+    const response = await apiClient.get('jobs/my_posted', { params });
     
-    // apiClient已处理成功响应
-    jobs.value = response.data.items;
-    pagination.total = response.data.pagination.total_items;
+    console.log('我发布的工作列表响应:', response);
+    
+    const { items = [], pagination: paginationData = {} as { total_items?: number; total?: number } } = getPaginatedData(response);
+    jobs.value = items as Job[];
+    pagination.total = paginationData.total_items || paginationData.total || 0;
   } catch (error) {
     console.error('获取发布的工作失败:', error);
     // apiClient已处理错误消息
@@ -232,17 +257,17 @@ const fetchJobs = async () => {
 };
 
 // 查看工作详情
-const viewJobDetails = (jobId) => {
+const viewJobDetails = (jobId: number) => {
   router.push(`/jobs/${jobId}`);
 };
 
 // 编辑工作
-const editJob = (jobId) => {
+const editJob = (jobId: number) => {
   router.push(`/employer/jobs/${jobId}/edit`);
 };
 
 // 取消工作
-const cancelJob = (jobId) => {
+const cancelJob = (jobId: number) => {
   currentJobId.value = jobId;
   currentAction.value = 'cancel';
   dialogTitle.value = '取消工作';
@@ -251,7 +276,7 @@ const cancelJob = (jobId) => {
 };
 
 // 完成工作
-const completeJob = (jobId) => {
+const completeJob = (jobId: number) => {
   currentJobId.value = jobId;
   currentAction.value = 'complete';
   dialogTitle.value = '完成工作';
@@ -273,7 +298,7 @@ const confirmAction = async () => {
       successMessage = '工作已成功取消';
     } else if (currentAction.value === 'complete') {
       endpoint = `jobs/${currentJobId.value}/complete`;
-      successMessage = '工作已标记为完成';
+      successMessage = '工作已成功标记为完成';
     }
     
     if (endpoint) {
@@ -290,17 +315,17 @@ const confirmAction = async () => {
 };
 
 // 判断工作是否可编辑
-const canEditJob = (job) => {
+const canEditJob = (job: Job) => {
   return ['draft', 'pending', 'rejected'].includes(job.status);
 };
 
 // 分页处理
-const handleSizeChange = (val) => {
+const handleSizeChange = (val: number) => {
   pagination.per_page = val;
   fetchJobs();
 };
 
-const handleCurrentChange = (val) => {
+const handleCurrentChange = (val: number) => {
   pagination.page = val;
   fetchJobs();
 };
@@ -311,14 +336,14 @@ const goToPostJob = () => {
 };
 
 // 格式化日期时间
-const formatDateTime = (dateString) => {
+const formatDateTime = (dateString: string) => {
   if (!dateString) return '';
   return dayjs(dateString).format('YYYY-MM-DD HH:mm');
 };
 
 // 获取状态显示文本
-const getStatusText = (status) => {
-  const statusMap = {
+const getStatusText = (status: string) => {
+  const statusMap: { [key: string]: string } = {
     draft: '草稿',
     pending: '待审核',
     approved: '已通过',
@@ -332,8 +357,8 @@ const getStatusText = (status) => {
 };
 
 // 获取状态标签类型
-const getStatusType = (status) => {
-  const typeMap = {
+const getStatusType = (status: string) => {
+  const typeMap: { [key: string]: string } = {
     draft: 'info',
     pending: 'warning',
     approved: 'success',
@@ -347,8 +372,8 @@ const getStatusType = (status) => {
 };
 
 // 获取薪资类型文本
-const getSalaryTypeText = (type) => {
-  const typeMap = {
+const getSalaryTypeText = (type: string) => {
+  const typeMap: { [key: string]: string } = {
     fixed: '固定',
     hourly: '小时',
     daily: '天',
@@ -358,25 +383,7 @@ const getSalaryTypeText = (type) => {
   return typeMap[type] || type;
 };
 
-// 监听路由参数变化
-watch(() => route.query.refresh, (val) => {
-  if (val === 'true') {
-    fetchJobs();
-    // 清除URL参数
-    router.replace({ query: {} });
-  }
-});
-
-// 组件挂载
 onMounted(() => {
-  // 检查用户角色是否为雇主
-  if (!authStore.isLoggedIn || authStore.user?.current_role !== 'employer') {
-    ElMessage.warning('请先以雇主身份登录');
-    router.push('/login');
-    return;
-  }
-  
-  // 获取发布的工作
   fetchJobs();
 });
 </script>

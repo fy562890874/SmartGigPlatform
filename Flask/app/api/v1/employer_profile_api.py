@@ -1,5 +1,5 @@
 from flask_restx import Namespace, Resource, fields
-from flask import request
+from flask import request, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from ...services.employer_profile_service import employer_profile_service
@@ -58,35 +58,94 @@ class EmployerProfileSelfResource(Resource):
     @jwt_required()
     @ns.response(200, '获取雇主档案成功', model=employer_profile_model)
     def get(self):
-        """获取当前登录用户的雇主档案"""
-        current_user_id = get_jwt_identity()
+        """获取当前登录雇主的档案信息"""
+        user_id = get_jwt_identity()
+        
         try:
-            profile = employer_profile_service.get_profile_by_user_id(current_user_id)
-            profile_data = EmployerProfileSchema().dump(profile)
-            return api_success_response(profile_data)
-        except (NotFoundException, AuthorizationException, BusinessException) as e:
-            raise e
+            profile = employer_profile_service.get_profile_by_user_id(user_id)
+            return profile, 200
+        except NotFoundException as e:
+            return {"code": 40401, "message": str(e), "data": None}, 404
         except Exception as e:
-            raise BusinessException(message="获取雇主档案时发生意外错误。", status_code=500, error_code=50001)
+            current_app.logger.error(f"Error retrieving employer profile: {str(e)}")
+            return {"code": 50001, "message": "服务器内部发生未知错误。", "data": None}, 500
 
     @jwt_required()
     @ns.expect(employer_profile_input_model, validate=True)
     @ns.response(200, '雇主档案更新成功', model=employer_profile_model)
     @ns.response(201, '雇主档案创建成功', model=employer_profile_model)
     def put(self):
-        """创建或更新当前登录用户的雇主档案"""
-        current_user_id = get_jwt_identity()
+        """创建或更新当前雇主档案"""
+        user_id = get_jwt_identity()
         data = request.json
-        # schema = EmployerProfileSchema(partial=True) # Use for validation
+        
+        # 确保传入了必需字段
+        if 'profile_type' not in data:
+            return {"code": 40001, "message": "缺少必需字段 'profile_type'", "data": None}, 400
+        
         try:
-            # validated_data = schema.load(data)
-            profile_exists = EmployerProfile.query.filter_by(user_id=current_user_id).first() is not None
-            profile = employer_profile_service.create_or_update_profile(current_user_id, data, is_creation=not profile_exists)
-            profile_data = EmployerProfileSchema().dump(profile)
-            status_code = 200 if profile_exists else 201
-            return api_success_response(profile_data, status_code)
-        except (InvalidUsageException, NotFoundException, AuthorizationException, BusinessException) as e:
-            raise e
+            # 检查是否已有档案
+            try:
+                profile = employer_profile_service.get_profile_by_user_id(user_id)
+                # 更新现有档案
+                updated_profile = employer_profile_service.update_profile(user_id, data)
+                return updated_profile, 200
+            except NotFoundException:
+                # 创建新档案
+                new_profile = employer_profile_service.create_profile(user_id, data)
+                return new_profile, 201
+        except BusinessException as e:
+            return {"code": e.code, "message": str(e), "data": None}, 400
         except Exception as e:
-            action = "更新" if profile_exists else "创建"
-            raise BusinessException(message=f"{action}雇主档案时发生意外错误: {str(e)}", status_code=500, error_code=50001) 
+            current_app.logger.error(f"Error updating employer profile: {str(e)}")
+            return {"code": 50001, "message": "服务器内部发生未知错误。", "data": None}, 500
+
+@ns.route('/me/avatar')
+class EmployerProfileAvatarResource(Resource):
+    @jwt_required()
+    @ns.response(200, '头像上传成功')
+    def post(self):
+        """上传雇主头像"""
+        user_id = get_jwt_identity()
+        
+        if 'avatar' not in request.files:
+            return {"code": 40001, "message": "没有上传图片文件", "data": None}, 400
+            
+        avatar_file = request.files['avatar']
+        
+        if avatar_file.filename == '':
+            return {"code": 40001, "message": "未选择文件", "data": None}, 400
+            
+        try:
+            avatar_url = employer_profile_service.upload_avatar(user_id, avatar_file)
+            return {"code": 0, "message": "头像上传成功", "data": {"avatar_url": avatar_url}}, 200
+        except BusinessException as e:
+            return {"code": e.code, "message": str(e), "data": None}, 400
+        except Exception as e:
+            current_app.logger.error(f"Error uploading avatar: {str(e)}")
+            return {"code": 50001, "message": "服务器内部发生未知错误。", "data": None}, 500
+
+@ns.route('/me/license')
+class EmployerProfileLicenseResource(Resource):
+    @jwt_required()
+    @ns.response(200, '营业执照上传成功')
+    def post(self):
+        """上传雇主营业执照"""
+        user_id = get_jwt_identity()
+        
+        if 'license' not in request.files:
+            return {"code": 40001, "message": "没有上传执照文件", "data": None}, 400
+            
+        license_file = request.files['license']
+        
+        if license_file.filename == '':
+            return {"code": 40001, "message": "未选择文件", "data": None}, 400
+            
+        try:
+            license_url = employer_profile_service.upload_license(user_id, license_file)
+            return {"code": 0, "message": "营业执照上传成功", "data": {"business_license_photo_url": license_url}}, 200
+        except BusinessException as e:
+            return {"code": e.code, "message": str(e), "data": None}, 400
+        except Exception as e:
+            current_app.logger.error(f"Error uploading license: {str(e)}")
+            return {"code": 50001, "message": "服务器内部发生未知错误。", "data": None}, 500 

@@ -1,11 +1,15 @@
 from flask_restx import Namespace, Resource, fields
-from flask import request
+from flask import request, current_app
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity # 用于生成 JWT
+import datetime
+import bcrypt
 
 from app.services.user_service import user_service # 导入 UserService 实例
 from app.schemas.user_schema import UserSchema # For serializing user output
 from app.utils.exceptions import AuthenticationException, InvalidUsageException, BusinessException # For catching
 from app.utils.helpers import api_success_response, api_error_response # 假设有响应格式化帮助函数
+from app.models.user import User # Import User model
+from app.core.extensions import db, bcrypt # Import database session and bcrypt
 
 # 创建 Namespace
 ns = Namespace('auth', description='用户认证操作')
@@ -51,19 +55,39 @@ class UserRegistration(Resource):
     @ns.response(400, 'Invalid input')
     @ns.response(409, 'User already exists')
     def post(self):
-        """用户注册"""
-        data = request.json
+        """注册用户并生成token"""
+        # Get registration data
+        registration_data = request.json
+        
+        # Validate required fields
+        if not registration_data.get('phone_number') or not registration_data.get('password'):
+            return {"code": 40001, "message": "手机号码和密码不能为空", "data": None}, 400
+        
         try:
-            # 调用 service 层进行注册
-            user = user_service.register_user(data)
-            # 序列化用户信息以返回
-            user_schema = UserSchema()
-            return api_success_response(user_schema.dump(user), 201)
-        except (InvalidUsageException, BusinessException) as e:
-            return api_error_response(str(e), e.status_code if hasattr(e, 'status_code') else 400)
+            # Register user and get token
+            user, token = user_service.register_user(
+                registration_data.get('phone_number'),
+                registration_data.get('password'),
+                registration_data.get('user_type', 'freelancer')
+            )
+            
+            # Return user info and token
+            return {
+                "code": 0,
+                "message": "注册成功",
+                "data": {
+                    "access_token": token,
+                    "user": user_service.user_to_dict(user)
+                }
+            }, 201
+        except BusinessException as e:
+            if "已被注册" in str(e):
+                return {"code": 40901, "message": str(e), "data": None}, 409
+            else:
+                return {"code": 40001, "message": str(e), "data": None}, 400
         except Exception as e:
-            # Log the exception e
-            return api_error_response("注册失败，请稍后再试", 500)
+            current_app.logger.error(f"用户注册失败: {str(e)}")
+            return {"code": 50001, "message": "服务器内部发生未知错误", "data": None}, 500
 
 @ns.route('/login')
 class UserLogin(Resource):
@@ -72,33 +96,42 @@ class UserLogin(Resource):
     @ns.response(400, 'Invalid input')
     @ns.response(401, 'Authentication failed')
     def post(self):
-        """用户登录"""
-        data = request.json
-        phone_number = data.get('phone_number')
-        password = data.get('password')
-
-        try:
-            user, token = user_service.login_user(phone_number, password)
-            user_schema = UserSchema()
-            user_data = user_schema.dump(user)
+        """登录接口"""
+        # Get login details from request
+        login_data = request.json
+        
+        # Validate required fields
+        if not login_data.get('phone_number') or not login_data.get('password'):
+            return {"code": 40001, "message": "手机号码和密码不能为空", "data": None}, 400
             
-            # 确保 available_roles 存在且是列表
-            if 'available_roles' not in user_data or not isinstance(user_data['available_roles'], list):
-                user_data['available_roles'] = [user.current_role] if user.current_role else []
-            
-            return api_success_response({
-                'access_token': token,
-                'user': user_data
-            })
-        except AuthenticationException as e:
-            return api_error_response(str(e), 401)
-        except InvalidUsageException as e:
-            return api_error_response(str(e), 400)
-        except BusinessException as e:
-            return api_error_response(str(e), e.status_code if hasattr(e, 'status_code') else 500)
-        except Exception as e:
-            # Log the exception e
-            return api_error_response("登录失败，请稍后再试", 500)
+        # Find user by phone number
+        user = User.query.filter_by(phone_number=login_data.get('phone_number')).first()
+          # Verify user exists and password is correct
+        if not user or not bcrypt.check_password_hash(user.password_hash, login_data.get('password')):
+            return {"code": 40101, "message": "手机号码或密码错误", "data": None}, 401
+        
+        # Check if user account is active
+        if user.status != 'active':
+            return {"code": 40101, "message": "账号已被禁用，请联系管理员", "data": None}, 401
+        
+        # Update last login timestamp
+        user.last_login_at = datetime.datetime.now(datetime.timezone.utc)
+        db.session.commit()
+        
+        # Create access token
+        expires = datetime.timedelta(days=7) if login_data.get('remember_me') else datetime.timedelta(hours=24)
+        # 使用user.uuid作为身份标识
+        access_token = create_access_token(identity=str(user.uuid), expires_delta=expires)
+        
+        # Return user info and token
+        return {
+            "code": 0,
+            "message": "登录成功",
+            "data": {
+                "access_token": access_token,
+                "user": user_service.user_to_dict(user)
+            }
+        }, 200
 
 # 可以添加一个获取当前用户信息的接口，用于验证token和获取用户信息
 @ns.route('/me')

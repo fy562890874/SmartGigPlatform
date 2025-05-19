@@ -5,6 +5,7 @@ import pinia from './stores'
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 import './assets/main.css'
+import './utils/debug' // 导入调试工具
 
 const app = createApp(App)
 

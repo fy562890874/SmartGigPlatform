@@ -13,7 +13,6 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
         ws: true, // 如果需要支持 WebSocket
-        rewrite: (path) => path.replace(/^\/api/, ''), // 重写请求路径
       },
     },
   },

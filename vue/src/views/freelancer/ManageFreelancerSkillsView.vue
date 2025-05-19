@@ -155,6 +155,7 @@ import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox, FormInstance } from 'element-plus';
 import { useAuthStore } from '@/stores/auth';
 import apiClient from '@/utils/apiClient';
+import { getPaginatedData } from '@/utils/http';
 
 // 路由和状态管理
 const router = useRouter();
@@ -209,7 +210,8 @@ const fetchFreelancerSkills = async () => {
   loading.skills = true;
   try {
     const response = await apiClient.get('profiles/freelancer/me/skills');
-    freelancerSkills.value = response.data.items || [];
+    const { items = [] } = getPaginatedData(response);
+    freelancerSkills.value = items;
   } catch (error) {
     console.error('获取零工技能失败:', error);
   } finally {
@@ -222,7 +224,7 @@ const fetchSkillCategories = async () => {
   loading.categories = true;
   try {
     const response = await apiClient.get('skills/categories');
-    skillCategories.value = response.data.categories || [];
+    skillCategories.value = response?.categories || [];
   } catch (error) {
     console.error('获取技能分类失败:', error);
   } finally {
@@ -236,10 +238,11 @@ const fetchAvailableSkills = async (category: string) => {
   
   loading.availableSkills = true;
   try {
-    const response = await apiClient.get('skills', { 
-      params: { category, per_page: 100 }
-    });
-    availableSkills.value = response.data.items || [];
+    const params = { category, per_page: 100 };
+    const response = await apiClient.get('skills', { params });
+    
+    const { items = [] } = getPaginatedData(response);
+    availableSkills.value = items;
   } catch (error) {
     console.error('获取可用技能失败:', error);
   } finally {

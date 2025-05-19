@@ -55,7 +55,6 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted, defineProps, defineEmits, withDefaults } from 'vue';
 import { ElMessage, FormInstance } from 'element-plus';
-import axios from 'axios';
 import { useAuthStore } from '@/stores/auth';
 import dayjs from 'dayjs';
 
@@ -189,16 +188,10 @@ const updateWorkTimes = async () => {
     end_time_actual: form.endTimeActual
   };
   
-  await axios.put(
-    `http://127.0.0.1:5000/api/v1/orders/${props.orderId}/actual_times`,
-    payload,
-    {
-      headers: {
-        'Authorization': `Bearer ${authStore.token}`,
-        'Content-Type': 'application/json'
-      }
-    }
-  );
+  // 使用apiClient而不是直接使用axios
+  await import('@/utils/apiClient').then(async ({ default: apiClient }) => {
+    await apiClient.put(`/orders/${props.orderId}/actual_times`, payload);
+  });
 };
 
 // 完成工作并提交时间
@@ -209,16 +202,10 @@ const completeWorkWithTimes = async () => {
     end_time_actual: form.endTimeActual
   };
   
-  await axios.post(
-    `http://127.0.0.1:5000/api/v1/orders/${props.orderId}/actions`,
-    payload,
-    {
-      headers: {
-        'Authorization': `Bearer ${authStore.token}`,
-        'Content-Type': 'application/json'
-      }
-    }
-  );
+  // 使用apiClient而不是直接使用axios
+  await import('@/utils/apiClient').then(async ({ default: apiClient }) => {
+    await apiClient.post(`/orders/${props.orderId}/actions`, payload);
+  });
 };
 
 // 初始化默认时间

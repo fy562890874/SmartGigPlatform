@@ -10,6 +10,15 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ECHO = False # Set to True for debugging SQL queries
 
+    # 数据库连接池设置
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_size': 10,             # 连接池大小
+        'max_overflow': 20,          # 允许溢出的连接数
+        'pool_timeout': 30,          # 等待连接的超时时间（秒）
+        'pool_recycle': 1800,        # 连接回收时间（秒），防止MySQL默认8小时断开
+        'pool_pre_ping': True        # 使用ping来检查连接是否可用
+    }
+
     # JWT Configuration
     JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'another_secret_key_for_jwt')
     # Configure JWT options like token expiration, etc.

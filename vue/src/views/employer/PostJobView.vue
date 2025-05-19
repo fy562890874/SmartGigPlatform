@@ -10,6 +10,11 @@
       <template #header>
         <div class="card-header">
           <h1>发布工作</h1>
+          <!-- 添加调试信息 -->
+          <div class="debug-info" v-if="isDebugMode">
+            <p>已加载 {{ jobCategories.length }} 个工作类别</p>
+            <p>已加载 {{ recommendedTags.length }} 个推荐标签</p>
+          </div>
         </div>
       </template>
       
@@ -297,13 +302,34 @@ const fetchJobCategories = async () => {
   try {
     const response = await apiClient.get('jobs/categories');
     
-    // 转换返回的类别格式
-    if (response.data && Array.isArray(response.data.categories)) {
-      jobCategories.value = response.data.categories.map((category: string) => ({
-        label: category,
+    // 调试输出响应结构
+    console.log('类别响应:', response);
+    
+    // 检查各种可能的响应格式
+    let categoriesData = [];
+    if (response && Array.isArray(response)) {
+      // 如果直接返回数组
+      categoriesData = response;
+    } else if (response && typeof response === 'object') {
+      // 检查不同的数据结构路径
+      if (response.categories && Array.isArray(response.categories)) {
+        categoriesData = response.categories;
+      } else if (response.data && Array.isArray(response.data.categories)) {
+        categoriesData = response.data.categories;
+      } else if (response.items && Array.isArray(response.items)) {
+        categoriesData = response.items;
+      }
+    }
+    
+    // 转换为需要的格式
+    if (categoriesData.length > 0) {
+      jobCategories.value = categoriesData.map((category: string) => ({
+        label: category, 
         value: category
       }));
     }
+    
+    console.log('处理后的类别数据:', jobCategories.value);
   } catch (error) {
     console.error('获取工作类别失败:', error);
     ElMessage.error('获取工作类别失败，请刷新重试');
@@ -318,9 +344,25 @@ const fetchRecommendedTags = async () => {
   try {
     const response = await apiClient.get('jobs/tags');
     
-    if (response.data && Array.isArray(response.data.tags)) {
-      recommendedTags.value = response.data.tags;
+    // 调试输出响应结构
+    console.log('标签响应:', response);
+    
+    // 检查各种可能的响应格式
+    let tagsData = [];
+    if (response && Array.isArray(response)) {
+      tagsData = response;
+    } else if (response && typeof response === 'object') {
+      if (response.tags && Array.isArray(response.tags)) {
+        tagsData = response.tags;
+      } else if (response.data && Array.isArray(response.data.tags)) {
+        tagsData = response.data.tags;
+      } else if (response.items && Array.isArray(response.items)) {
+        tagsData = response.items;
+      }
     }
+    
+    recommendedTags.value = tagsData;
+    console.log('处理后的标签数据:', recommendedTags.value);
   } catch (error) {
     console.error('获取推荐标签失败:', error);
   } finally {
@@ -429,4 +471,12 @@ onMounted(() => {
 .el-input-number {
   width: 100%;
 }
-</style> 
+
+.debug-info {
+  margin-top: 10px;
+  padding: 10px;
+  background-color: #f0f9eb;
+  border: 1px dashed #67c23a;
+  font-size: 12px;
+}
+</style>

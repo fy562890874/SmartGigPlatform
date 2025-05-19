@@ -4,6 +4,7 @@ from ..models.user import User
 from ..models.job import Job, JobApplication # Corrected import for JobApplication
 from ..utils.exceptions import NotFoundException, AuthorizationException, InvalidUsageException, BusinessException
 from sqlalchemy.orm import joinedload
+from sqlalchemy import func  # 添加对func的导入
 from datetime import datetime, timedelta, timezone # Ensure timezone is imported
 from decimal import Decimal, InvalidOperation
 from flask import current_app
@@ -36,6 +37,8 @@ class OrderService:
         Get orders for a specific user (either as freelancer or employer).
         Supports filtering, pagination, and sorting.
         """
+        current_app.logger.info(f"[OrderService] Fetching orders for user_id: {user_id}, role: {user_role}")
+        
         query = Order.query.options(
             joinedload(Order.job),
             joinedload(Order.freelancer),
@@ -43,14 +46,17 @@ class OrderService:
         )
 
         if user_role == 'freelancer':
+            current_app.logger.debug(f"[OrderService] Filtering as freelancer with ID: {user_id}")
             query = query.filter(Order.freelancer_user_id == user_id)
         elif user_role == 'employer':
+            current_app.logger.debug(f"[OrderService] Filtering as employer with ID: {user_id}")
             query = query.filter(Order.employer_user_id == user_id)
         else:
-            # This case should ideally not happen if role is determined correctly
+            current_app.logger.warning(f"[OrderService] Invalid user role: {user_role}")
             raise AuthorizationException("无效的用户角色，无法查询订单。")
 
         if filters:
+            current_app.logger.debug(f"[OrderService] Applying filters: {filters}")
             if filters.get('status'):
                 query = query.filter(Order.status == filters['status'])
             # Add more filters as needed: job_id, date ranges, etc.
@@ -60,8 +66,21 @@ class OrderService:
         # Default sort or handle based on input
         query = query.order_by(Order.created_at.desc())
 
-        paginated_orders = query.paginate(page=page, per_page=per_page, error_out=False)
-        return paginated_orders
+        # 验证查询SQL
+        try:
+            current_app.logger.debug(f"[OrderService] SQL Query: {query}")
+            
+            # 使用辅助函数获取订单总数
+            order_count = self._get_query_count(query)
+            current_app.logger.info(f"[OrderService] Total orders matching query: {order_count}")
+            
+            paginated_orders = query.paginate(page=page, per_page=per_page, error_out=False)
+            current_app.logger.info(f"[OrderService] Returning {len(paginated_orders.items)} orders on page {page}")
+            
+            return paginated_orders
+        except Exception as e:
+            current_app.logger.error(f"[OrderService] Error executing query: {str(e)}", exc_info=True)
+            raise BusinessException(f"查询订单时出错: {str(e)}", status_code=500)
 
     def create_order_from_application(self, application: JobApplication, employer_user_id: int):
         """
@@ -392,5 +411,32 @@ class OrderService:
             current_app.logger.error(f"更新订单实际时间失败: {str(e)}")
             raise BusinessException(message=f"更新订单实际时间失败: {str(e)}", status_code=500)
 
+    def _get_query_count(self, query):
+        """安全地获取查询结果数量，兼容不同版本的SQLAlchemy"""
+        try:
+            current_app.logger.debug(f"[OrderService] 尝试获取查询结果数量")
+            # 尝试直接使用查询对象的count方法
+            return query.count()
+        except (AttributeError, TypeError) as e1:
+            current_app.logger.warning(f"[OrderService] 直接计数失败，尝试其他方法: {e1}")
+            try:
+                # 尝试新版SQLAlchemy语法
+                count_query = query.statement.with_only_columns(func.count()).order_by(None)
+                return db.session.execute(count_query).scalar()
+            except Exception as e2:
+                current_app.logger.warning(f"[OrderService] 新版语法失败，尝试旧版语法: {e2}")
+                try:
+                    # 尝试旧版SQLAlchemy语法
+                    return db.session.execute(
+                        query.statement.with_only_columns([func.count()]).order_by(None)
+                    ).scalar()
+                except Exception as e3:
+                    current_app.logger.error(f"[OrderService] 所有计数方法均失败: {e3}")
+                    # 最后的回退方案：获取所有数据并计数
+                    try:
+                        return len(query.all())
+                    except Exception as e4:
+                        current_app.logger.error(f"[OrderService] 无法获取查询结果数量: {e4}")
+                        return 0
 
 order_service = OrderService()

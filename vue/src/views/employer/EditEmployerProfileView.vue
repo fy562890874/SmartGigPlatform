@@ -338,40 +338,40 @@ const contactsRules = {
 const fetchEmployerProfile = async () => {
   loading.profile = true;
   try {
-    const response = await apiClient.get('profiles/employer/me');
+    const profileData = await apiClient.get('/profiles/employer/me');
     
-    // 填充基本信息表单
-    const profileData = response.data;
+    console.log('雇主档案响应:', profileData);
+    
     profileLoaded.value = true;
     
     // 基本信息
-    profileForm.basic.profile_type = profileData.profile_type || 'individual';
-    profileForm.basic.real_name = profileData.real_name || '';
-    profileForm.basic.nickname = profileData.nickname || '';
-    profileForm.basic.contact_email = profileData.contact_email || '';
-    profileForm.basic.contact_phone = profileData.contact_phone || '';
-    profileForm.basic.location_province = profileData.location_province || '';
-    profileForm.basic.location_city = profileData.location_city || '';
-    profileForm.basic.location_district = profileData.location_district || '';
-    profileForm.basic.location_address = profileData.location_address || '';
-    profileForm.basic.avatar_url = profileData.avatar_url || '';
+    profileForm.basic.profile_type = profileData?.profile_type || 'individual';
+    profileForm.basic.real_name = profileData?.real_name || '';
+    profileForm.basic.nickname = profileData?.nickname || '';
+    profileForm.basic.contact_email = profileData?.contact_email || '';
+    profileForm.basic.contact_phone = profileData?.contact_phone || '';
+    profileForm.basic.location_province = profileData?.location_province || '';
+    profileForm.basic.location_city = profileData?.location_city || '';
+    profileForm.basic.location_district = profileData?.location_district || '';
+    profileForm.basic.location_address = profileData?.location_address || '';
+    profileForm.basic.avatar_url = profileData?.avatar_url || '';
     
     // 公司信息（如果是企业雇主）
-    if (profileData.profile_type === 'company') {
-      profileForm.company.company_name = profileData.company_name || '';
-      profileForm.company.business_license_number = profileData.business_license_number || '';
-      profileForm.company.company_address = profileData.company_address || '';
-      profileForm.company.company_description = profileData.company_description || '';
-      profileForm.company.business_license_photo_url = profileData.business_license_photo_url || '';
+    if (profileData?.profile_type === 'company') {
+      profileForm.company.company_name = profileData?.company_name || '';
+      profileForm.company.business_license_number = profileData?.business_license_number || '';
+      profileForm.company.company_address = profileData?.company_address || '';
+      profileForm.company.company_description = profileData?.company_description || '';
+      profileForm.company.business_license_photo_url = profileData?.business_license_photo_url || '';
     }
     
     // 简介与描述
-    profileForm.description.bio = profileData.bio || '';
-    profileForm.description.hiring_preference = profileData.hiring_preference || '';
+    profileForm.description.bio = profileData?.bio || '';
+    profileForm.description.hiring_preference = profileData?.hiring_preference || '';
     
     // 联系方式与链接
-    profileForm.contacts.website_url = profileData.website_url || '';
-    profileForm.contacts.linkedin_url = profileData.linkedin_url || '';
+    profileForm.contacts.website_url = profileData?.website_url || '';
+    profileForm.contacts.linkedin_url = profileData?.linkedin_url || '';
     
   } catch (error) {
     console.error('获取雇主档案失败:', error);
@@ -396,17 +396,16 @@ const uploadAvatar = async (options: any) => {
     // 创建一个FormData对象
     const formData = new FormData();
     formData.append('avatar', file);
-    
-    const response = await apiClient.post('profiles/employer/me/avatar', formData, {
+    const responseData = await apiClient.post('/profiles/employer/me/avatar', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
     });
     
     // 更新头像URL
-    profileForm.basic.avatar_url = response.data.avatar_url;
+    profileForm.basic.avatar_url = responseData?.avatar_url || '';
     ElMessage.success('头像上传成功');
-    onSuccess(response);
+    onSuccess(responseData);
   } catch (error) {
     console.error('头像上传失败:', error);
     onError('上传失败');
@@ -427,17 +426,16 @@ const uploadLicensePhoto = async (options: any) => {
     // 创建一个FormData对象
     const formData = new FormData();
     formData.append('license', file);
-    
-    const response = await apiClient.post('profiles/employer/me/license', formData, {
+    const responseData = await apiClient.post('/profiles/employer/me/license', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
     });
     
     // 更新营业执照照片URL
-    profileForm.company.business_license_photo_url = response.data.business_license_photo_url;
+    profileForm.company.business_license_photo_url = responseData?.business_license_photo_url || '';
     ElMessage.success('营业执照照片上传成功');
-    onSuccess(response);
+    onSuccess(responseData);
   } catch (error) {
     console.error('营业执照照片上传失败:', error);
     onError('上传失败');
@@ -452,13 +450,13 @@ const saveBasicInfo = async () => {
     if (valid) {
       loading.saveBasic = true;
       try {
-        // 处理雇主类型，如果已经加载过档案，则不能修改雇主类型
+        // 确保包含profile_type字段
         const payload = { ...profileForm.basic };
-        if (profileLoaded.value) {
-          delete payload.profile_type;
+        if (!profileLoaded.value) {
+          payload.profile_type = profileForm.basic.profile_type || 'individual';
         }
         
-        await apiClient.put('profiles/employer/me', payload);
+        await apiClient.put('/profiles/employer/me', payload);
         ElMessage.success('基本信息保存成功');
         
         // 如果是新创建且选择了公司类型，自动切换到公司信息标签
@@ -483,7 +481,13 @@ const saveCompanyInfo = async () => {
     if (valid) {
       loading.saveCompany = true;
       try {
-        await apiClient.put('profiles/employer/me', profileForm.company);
+        // 确保包含profile_type字段
+        const payload = { 
+          ...profileForm.company,
+          profile_type: 'company'
+        };
+        
+        await apiClient.put('/profiles/employer/me', payload);
         ElMessage.success('企业信息保存成功');
       } catch (error) {
         console.error('保存企业信息失败:', error);
@@ -502,7 +506,13 @@ const saveDescription = async () => {
     if (valid) {
       loading.saveDesc = true;
       try {
-        await apiClient.put('profiles/employer/me', profileForm.description);
+        // 确保包含profile_type字段
+        const payload = { 
+          ...profileForm.description,
+          profile_type: profileForm.basic.profile_type || 'individual'
+        };
+        
+        await apiClient.put('/profiles/employer/me', payload);
         ElMessage.success('简介与描述保存成功');
       } catch (error) {
         console.error('保存简介与描述失败:', error);
@@ -521,7 +531,13 @@ const saveContacts = async () => {
     if (valid) {
       loading.saveContacts = true;
       try {
-        await apiClient.put('profiles/employer/me', profileForm.contacts);
+        // 确保包含profile_type字段
+        const payload = { 
+          ...profileForm.contacts,
+          profile_type: profileForm.basic.profile_type || 'individual'
+        };
+        
+        await apiClient.put('/profiles/employer/me', payload);
         ElMessage.success('联系方式与链接保存成功');
       } catch (error) {
         console.error('保存联系方式与链接失败:', error);

@@ -210,7 +210,37 @@ import { ElMessage } from 'element-plus';
 import { Briefcase, Clock, DocumentChecked, ShoppingCart, Plus, Document, List, Setting } from '@element-plus/icons-vue';
 import { useAuthStore } from '@/stores/auth';
 import apiClient from '@/utils/apiClient';
+import { getPaginatedData } from '@/utils/http';
 import dayjs from 'dayjs';
+
+// 定义类型接口
+interface JobItem {
+  id: number;
+  title: string;
+  status: string;
+  created_at: string;
+  salary_amount: number;
+  salary_type: string;
+  application_count: number;
+  [key: string]: any;
+}
+
+interface ApplicationItem {
+  job_id: number;
+  freelancer_user_id: number;
+  status: string;
+  created_at: string;
+  job: {
+    title: string;
+    [key: string]: any;
+  };
+  freelancer: {
+    nickname?: string;
+    avatar_url?: string;
+    [key: string]: any;
+  };
+  [key: string]: any;
+}
 
 // 路由与状态管理
 const router = useRouter();
@@ -232,17 +262,19 @@ const dashboardData = reactive({
 });
 
 // 最近申请和工作
-const recentApplications = ref([]);
-const recentJobs = ref([]);
+const recentApplications = ref<ApplicationItem[]>([]);
+const recentJobs = ref<JobItem[]>([]);
 
 // 获取仪表盘数据
 const fetchDashboardData = async () => {
   loading.dashboard = true;
   try {
-    const response = await apiClient.get('employer/dashboard');
+    const dashboardResponse = await apiClient.get('employer/dashboard');
     
     // 更新仪表盘数据
-    Object.assign(dashboardData, response.data);
+    if (dashboardResponse && typeof dashboardResponse === 'object') {
+      Object.assign(dashboardData, dashboardResponse);
+    }
   } catch (error) {
     console.error('获取仪表盘数据失败:', error);
   } finally {
@@ -254,15 +286,14 @@ const fetchDashboardData = async () => {
 const fetchRecentApplications = async () => {
   loading.recentApplications = true;
   try {
-    const response = await apiClient.get('employer/recent-applications', {
-      params: {
-        limit: 5 // 只获取最新的5条
-      }
-    });
+    const params = { limit: 5 }; // 只获取最新的5条
+    const response = await apiClient.get('employer/recent-applications', { params });
     
-    recentApplications.value = response.data;
+    const { items = [] } = getPaginatedData(response);
+    recentApplications.value = items as ApplicationItem[];
   } catch (error) {
     console.error('获取最新申请失败:', error);
+    recentApplications.value = [];
   } finally {
     loading.recentApplications = false;
   }
@@ -272,36 +303,39 @@ const fetchRecentApplications = async () => {
 const fetchRecentJobs = async () => {
   loading.recentJobs = true;
   try {
-    const response = await apiClient.get('jobs/my-posted', {
-      params: {
-        page: 1,
-        per_page: 5,
-        sort_by: 'created_at_desc'
-      }
-    });
+    const params = {
+      page: 1,
+      per_page: 5,
+      sort_by: 'created_at_desc'
+    };
     
-    recentJobs.value = response.data.items;
+    const response = await apiClient.get('jobs/my-posted', { params });
+    console.log('Dashboard最近工作响应:', response);
+    
+    const { items = [] } = getPaginatedData(response);
+    recentJobs.value = items as JobItem[];
   } catch (error) {
     console.error('获取最近工作失败:', error);
+    recentJobs.value = [];
   } finally {
     loading.recentJobs = false;
   }
 };
 
 // 导航到指定路径
-const navigateTo = (path) => {
+const navigateTo = (path: string) => {
   router.push(path);
 };
 
 // 格式化日期时间
-const formatDateTime = (dateString) => {
+const formatDateTime = (dateString: string) => {
   if (!dateString) return '';
   return dayjs(dateString).format('YYYY-MM-DD HH:mm');
 };
 
-// 获取申请状态显示文本
-const getStatusText = (status) => {
-  const statusMap = {
+// 获取申请状态显示文本 
+const getStatusText = (status: string) => {
+  const statusMap: {[key: string]: string} = {
     pending: '待处理',
     accepted: '已接受',
     rejected: '已拒绝',
@@ -311,8 +345,8 @@ const getStatusText = (status) => {
 };
 
 // 获取申请状态标签类型
-const getStatusType = (status) => {
-  const typeMap = {
+const getStatusType = (status: string) => {
+  const typeMap: {[key: string]: string} = {
     pending: 'warning',
     accepted: 'success',
     rejected: 'danger',
@@ -322,8 +356,8 @@ const getStatusType = (status) => {
 };
 
 // 获取工作状态显示文本
-const getJobStatusText = (status) => {
-  const statusMap = {
+const getJobStatusText = (status: string) => {
+  const statusMap: {[key: string]: string} = {
     draft: '草稿',
     pending: '待审核',
     approved: '已通过',
@@ -337,8 +371,8 @@ const getJobStatusText = (status) => {
 };
 
 // 获取工作状态标签类型
-const getJobStatusType = (status) => {
-  const typeMap = {
+const getJobStatusType = (status: string) => {
+  const typeMap: {[key: string]: string} = {
     draft: 'info',
     pending: 'warning',
     approved: 'success',
@@ -352,8 +386,8 @@ const getJobStatusType = (status) => {
 };
 
 // 获取薪资类型文本
-const getSalaryTypeText = (type) => {
-  const typeMap = {
+const getSalaryTypeText = (type: string) => {
+  const typeMap: {[key: string]: string} = {
     fixed: '固定',
     hourly: '小时',
     daily: '天',
@@ -362,21 +396,6 @@ const getSalaryTypeText = (type) => {
   };
   return typeMap[type] || type;
 };
-
-// 组件挂载
-onMounted(() => {
-  // 检查用户角色是否为雇主
-  if (!authStore.isLoggedIn || authStore.user?.current_role !== 'employer') {
-    ElMessage.warning('请先以雇主身份登录');
-    router.push('/login');
-    return;
-  }
-  
-  // 获取数据
-  fetchDashboardData();
-  fetchRecentApplications();
-  fetchRecentJobs();
-});
 </script>
 
 <style scoped>

@@ -132,11 +132,9 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import axios from 'axios';
 import { ElMessage, FormInstance } from 'element-plus';
 import { Plus } from '@element-plus/icons-vue';
 import { useAuthStore } from '@/stores/auth';
-import apiConfig from '@/utils/apiConfig';
 import apiClient from '@/utils/apiClient';
 
 // 路由和状态管理
@@ -245,6 +243,7 @@ onMounted(() => {
 
 // 文件上传处理函数 - 通常会对接云存储服务如阿里云OSS、七牛云等
 // 这里为了演示，直接使用模拟的URL
+// TODO: 实际生产环境中需要实现真正的文件上传到OSS或其他云存储服务
 const uploadIdCardFront = (options: any) => {
   const { file, onSuccess } = options;
   // 模拟上传，实际应该调用上传API
@@ -290,7 +289,7 @@ const agreeTerms = () => {
 // 提交认证申请
 const submitVerification = async () => {
   if (!verificationFormRef.value) return;
-
+  
   await verificationFormRef.value.validate(async (valid) => {
     if (valid) {
       if (!agreeToTerms.value) {
@@ -301,13 +300,13 @@ const submitVerification = async () => {
       try {
         loading.value = true;
         
-        // 准备提交数据，保留必要字段
+        // 准备提交数据
         const submitData = {
           profile_type: verificationForm.profile_type,
           submitted_data: {}
         };
-
-        // 根据认证类型设置提交数据
+        
+        // 根据认证类型准备数据
         if (verificationForm.profile_type === 'freelancer' || verificationForm.profile_type === 'employer_individual') {
           submitData.submitted_data = {
             real_name: verificationForm.submitted_data.real_name,
@@ -323,17 +322,46 @@ const submitVerification = async () => {
             business_license_photo_url: verificationForm.submitted_data.business_license_photo_url
           };
         }
-
-        // 使用apiClient发送认证请求到后端API
-        const response = await apiClient.post('verifications/submit', submitData);
         
-        // apiClient已处理成功响应，直接使用返回的数据
-        ElMessage.success('认证申请提交成功，请耐心等待审核');
-        // 跳转到认证记录页面
-        router.push('/verifications/records');
+        // 调试日志
+        console.log('提交认证数据:', submitData);
+        
+        // 直接使用主要端点 /verifications
+        try {
+          const response = await apiClient.post('/verifications', submitData, {
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          // 检查响应格式
+          if (response && (response.data?.code === 0 || response.data?.success === true || response.status === 201)) {
+            ElMessage.success('认证申请提交成功，请耐心等待审核');
+            // 跳转到我的认证记录页面
+            router.push('/my-verifications');
+          } else {
+            throw new Error('服务器响应异常');
+          }
+        } catch (error) {
+          // 如果主端点失败，尝试备用端点
+          console.warn('尝试备用API路径 /verifications/submit');
+          const response = await apiClient.post('/verifications/submit', submitData, {
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (response && (response.data?.code === 0 || response.data?.success === true || response.status === 201)) {
+            ElMessage.success('认证申请提交成功，请耐心等待审核');
+            // 跳转到我的认证记录页面
+            router.push('/my-verifications');
+          } else {
+            throw new Error('服务器响应异常');
+          }
+        }
       } catch (error: any) {
         console.error('提交认证申请失败:', error);
-        // apiClient已处理错误响应，这里可以添加特定的业务逻辑
+        ElMessage.error(error.response?.data?.message || '提交认证申请失败，请稍后再试');
       } finally {
         loading.value = false;
       }

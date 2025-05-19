@@ -184,11 +184,11 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import axios from 'axios';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { useAuthStore } from '@/stores/auth';
-import apiConfig from '@/utils/apiConfig';
 import apiClient from '@/utils/apiClient';
+import { getPaginatedData } from '@/utils/http';
+import dayjs from 'dayjs';
 
 // 路由和认证
 const router = useRouter();
@@ -210,19 +210,84 @@ const filterParams = reactive({
 });
 
 // 获取用户认证记录
+interface PaginationData {
+  total_items?: number;
+  total?: number;
+  total_pages?: number;
+  pages?: number;
+}
+
 const fetchVerifications = async () => {
   loading.value = true;
   try {
-    const response = await apiClient.get('verifications/me', { params: filterParams });
+    const params = {
+      page: filterParams.page,
+      per_page: filterParams.per_page
+    };
     
-    // apiClient已处理成功响应
-    const data = response.data;
-    verifications.value = data.items;
-    totalItems.value = data.pagination.total_items;
-    totalPages.value = data.pagination.total_pages;
-  } catch (error: any) {
+    // 仅当有筛选条件时添加
+    if (filterParams.profile_type) {
+      params['profile_type'] = filterParams.profile_type;
+    }
+    
+    // 记录API请求
+    console.log('获取认证记录，参数:', params);
+    
+    // 直接请求 /verifications/my 端点
+    const response = await apiClient.get('/verifications/my', { params });
+    
+    // 正确解析api_success_response返回的数据结构
+    if (response.data && response.data.data) {
+      // 后端返回的包装格式
+      const responseData = response.data.data;
+      verifications.value = responseData.items || [];
+      totalItems.value = responseData.total_items || 0;
+      totalPages.value = responseData.total_pages || 1;
+      
+      console.log('认证记录获取成功:', verifications.value.length + ' 条记录');
+    } else {
+      // 尝试直接解析数据
+      const { items = [], pagination } = getPaginatedData(response);
+      verifications.value = items;
+      totalItems.value = pagination?.total_items || pagination?.total || 0;
+      totalPages.value = pagination?.total_pages || pagination?.pages || 1;
+    }
+  } catch (error) {
     console.error('获取认证记录失败:', error);
-    // apiClient已处理错误消息
+    
+    // 如果 /my 失败，尝试 /me 端点作为备选
+    try {
+      const params = {
+        page: filterParams.page,
+        per_page: filterParams.per_page
+      };
+      
+      if (filterParams.profile_type) {
+        params['profile_type'] = filterParams.profile_type;
+      }
+      
+      console.warn('尝试备用API路径 /verifications/me');
+      const response = await apiClient.get('/verifications/me', { params });
+      
+      // 正确解析api_success_response返回的数据结构
+      if (response.data && response.data.data) {
+        // 后端返回的包装格式
+        const responseData = response.data.data;
+        verifications.value = responseData.items || [];
+        totalItems.value = responseData.total_items || 0;
+        totalPages.value = responseData.total_pages || 1;
+      } else {
+        // 尝试直接解析数据
+        const { items = [], pagination } = getPaginatedData(response);
+        verifications.value = items;
+        totalItems.value = pagination?.total_items || pagination?.total || 0;
+        totalPages.value = pagination?.total_pages || pagination?.pages || 1;
+      }
+    } catch (fallbackError) {
+      console.error('备用路径也失败:', fallbackError);
+      ElMessage.error('获取认证记录失败，请稍后再试');
+      verifications.value = [];
+    }
   } finally {
     loading.value = false;
   }
@@ -289,7 +354,7 @@ const viewDetails = (record: any) => {
 // 重新申请认证
 const reapply = (record: any) => {
   router.push({
-    path: '/verifications/submit',
+    path: '/submit-verification',
     query: { type: record.profile_type, recordId: record.id }
   });
 };
@@ -304,7 +369,7 @@ const reapplyFromDetails = () => {
 
 // 前往提交认证页面
 const goToSubmit = () => {
-  router.push('/verifications/submit');
+  router.push('/submit-verification');
 };
 
 // 页面加载时获取数据
