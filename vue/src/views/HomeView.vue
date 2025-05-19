@@ -377,28 +377,26 @@ const loadingFeaturedJobs = ref(false)
 const fetchFeaturedJobs = async () => {
   loadingFeaturedJobs.value = true;
   try {
-    const response = await apiClient.get('/jobs', {
+    const response = await apiClient.get('jobs', {
       params: {
         status: 'active',
         sort_by: 'created_at_desc',
         page: 1,
-        per_page: 10,
-      },
+        per_page: 6, // 首页只展示6个热门工作
+        is_urgent: true // 优先展示紧急招聘
+      }
     });
 
-    if (response.data && response.data.items) {
-      featuredJobs.value = response.data.items.map((job: Job) => ({
-        ...job,
-        company_name_display: job.employer_info?.name || job.employer_user_id,
-        salary_range_display: `${job.salary_amount}${job.salary_type === 'fixed' ? '元' : '元/' + job.salary_type} ${job.salary_negotiable ? '(可议)' : ''}`,
-      }));
-    } else {
-      featuredJobs.value = [];
-    }
+    // apiClient已处理成功响应
+    featuredJobs.value = response.data.items.map((job: Job) => ({
+      ...job,
+      company_name_display: job.employer_info?.name || `雇主 #${job.employer_user_id}`,
+      salary_range_display: `${job.salary_amount}${job.salary_type === 'fixed' ? '元' : '元/' + job.salary_type} ${job.salary_negotiable ? '(可议)' : ''}`,
+    }));
   } catch (error) {
     console.error('获取推荐职位失败:', error);
-    ElMessage.error('获取推荐职位失败，请稍后重试。');
     featuredJobs.value = [];
+    // 错误已由apiClient处理
   } finally {
     loadingFeaturedJobs.value = false;
   }

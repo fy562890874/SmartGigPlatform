@@ -132,6 +132,7 @@ import { Location, Calendar, Clock, Pointer, Share, ArrowLeft } from '@element-p
 import DefaultHeader from '@/components/common/DefaultHeader.vue';
 import DefaultFooter from '@/components/common/DefaultFooter.vue';
 import apiConfig from '@/utils/apiConfig';
+import apiClient from '@/utils/apiClient';
 
 // Inline Type Definitions based on backend API (job_api.py, job_application_api.py)
 interface GeoPoint {
@@ -217,26 +218,17 @@ const fetchJobDetails = async () => {
     return;
   }
   loading.value = true;
-  try {    // 使用 apiConfig.getApiUrl 构造 API 路径
-    const response = await axios.get(apiConfig.getApiUrl(`/jobs/${jobId.value}`));
-    if (response.data && response.data.code === 0) {
-      job.value = response.data.data;
-      job.value = response.data;
-      // If employer_info or category_details are expected but not directly on Job from backend,
-      // they would need to be handled here or the Job interface adjusted if API sends them.
-      // For now, assuming job_output_model is directly used.
-      if (authStore.isLoggedIn) {
-        await checkApplicationStatus();
-      }
-    } else {
-      job.value = null;
-      ElMessage.error('未找到工作详情或API响应格式不正确。');
+  try {
+    const response = await apiClient.get(`jobs/${jobId.value}`);
+    job.value = response.data;
+    
+    if (authStore.isLoggedIn) {
+      await checkApplicationStatus();
     }
   } catch (error: any) {
     console.error('获取工作详情失败:', error);
     job.value = null;
-    // Error already handled by apiClient interceptor, but can add specific logic
-    // ElMessage.error(error.message || '获取工作详情失败，请稍后再试。');
+    // 错误已由apiClient处理
   } finally {
     loading.value = false;
   }
@@ -244,22 +236,16 @@ const fetchJobDetails = async () => {
 
 const checkApplicationStatus = async () => {
   if (!authStore.isLoggedIn || !job.value) return;
-  applying.value = true; // This seems to be for UI state, not directly "applying"
-  try {    // 使用 apiConfig.getApiUrl 构造 API 路径
-    const token = authStore.token;
-    const response = await axios.get(
-      apiConfig.getApiUrl(`/job-applications/check`), 
-      {
-        headers: { Authorization: `Bearer ${token}` },
-        params: { job_id: job.value.id }
-      }
-    );
-    if (response.data && response.data.code === 0) {
-      hasApplied.value = response.data.data.has_applied;
-    }
+  applying.value = true;
+  try {
+    const response = await apiClient.get('job-applications/check', {
+      params: { job_id: job.value.id }
+    });
+    
+    hasApplied.value = response.data.has_applied;
   } catch (error) {
     console.error('检查申请状态失败:', error);
-    // ElMessage.error('检查申请状态失败。'); // Error handled by interceptor
+    // 错误已由apiClient处理
   } finally {
     applying.value = false;
   }
@@ -299,21 +285,15 @@ const submitApplication = async () => {
   await applicationFormRef.value.validate(async (valid) => {
     if (valid && job.value) {
       submittingApplication.value = true;
-      try {        // 使用 apiConfig.getApiUrl 构造 API 路径
-        const token = authStore.token;
-        const response = await axios.post(
-          apiConfig.getApiUrl(`/job-applications/jobs/${job.value.id}/apply`), 
-          applicationForm,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        if (response.data && response.data.code === 0) {
-          ElMessage.success('申请已成功提交！');
-          hasApplied.value = true; // Update status after successful application
-          applyModalVisible.value = false;
-        }
+      try {
+        const response = await apiClient.post(`job-applications/jobs/${job.value.id}/apply`, applicationForm);
+        
+        ElMessage.success('申请已成功提交！');
+        hasApplied.value = true;
+        applyModalVisible.value = false;
       } catch (error) {
         console.error('提交申请失败:', error);
-        // ElMessage.error('提交申请失败，请重试。'); // Error handled by interceptor
+        // 错误已由apiClient处理
       } finally {
         submittingApplication.value = false;
       }

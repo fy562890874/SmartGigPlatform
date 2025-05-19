@@ -137,6 +137,7 @@ import { ElMessage, FormInstance } from 'element-plus';
 import { Plus } from '@element-plus/icons-vue';
 import { useAuthStore } from '@/stores/auth';
 import apiConfig from '@/utils/apiConfig';
+import apiClient from '@/utils/apiClient';
 
 // 路由和状态管理
 const router = useRouter();
@@ -323,28 +324,16 @@ const submitVerification = async () => {
           };
         }
 
-        // 发送认证请求到后端API
-        const response = await axios.post(
-          apiConfig.getApiUrl('verifications/submit'), 
-          submitData,
-          {
-            headers: {
-              'Authorization': `Bearer ${authStore.token}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-
-        if (response.data.code === 0) {
-          ElMessage.success('认证申请提交成功，请耐心等待审核');
-          // 跳转到认证记录页面
-          router.push('/verifications/records');
-        } else {
-          ElMessage.error(response.data.message || '提交失败，请稍后重试');
-        }
+        // 使用apiClient发送认证请求到后端API
+        const response = await apiClient.post('verifications/submit', submitData);
+        
+        // apiClient已处理成功响应，直接使用返回的数据
+        ElMessage.success('认证申请提交成功，请耐心等待审核');
+        // 跳转到认证记录页面
+        router.push('/verifications/records');
       } catch (error: any) {
         console.error('提交认证申请失败:', error);
-        ElMessage.error(error.response?.data?.message || '提交失败，请稍后重试');
+        // apiClient已处理错误响应，这里可以添加特定的业务逻辑
       } finally {
         loading.value = false;
       }

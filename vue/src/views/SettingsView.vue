@@ -1,251 +1,318 @@
+<!--
+  @file SettingsView.vue
+  @description 用户设置页面，包括账号基本信息设置、密码修改等功能
+  @author Fy
+  @date 2023-05-20
+-->
 <template>
   <div class="settings-view page-container">
-    <el-card shadow="never">
+    <el-card shadow="never" class="settings-card">
       <template #header>
         <div class="card-header">
-          <span>账号设置</span>
+          <h1>账号设置</h1>
         </div>
       </template>
-
-      <el-tabs v-model="activeTab" class="settings-tabs">
-        <el-tab-pane label="个人资料" name="profile">
-          <div class="tab-content">
-            <h3>更新个人信息</h3>
-            <el-form :model="profileForm" :rules="profileRules" ref="profileFormRef" label-width="120px">
-              <el-form-item label="手机号">
-                <el-input :value="authStore.user?.phone_number" disabled></el-input>
-              </el-form-item>
-              <el-form-item label="当前角色">
-                 <el-input :value="userRoleDisplay" disabled></el-input>
-              </el-form-item>
-              <el-form-item label="昵称" prop="nickname">
-                <el-input v-model="profileForm.nickname" placeholder="请输入昵称"></el-input>
-              </el-form-item>
-              <el-form-item label="邮箱" prop="email">
-                <el-input v-model="profileForm.email" placeholder="请输入邮箱"></el-input>
-              </el-form-item>
-              <!-- 其他可编辑的用户信息，如头像等 -->
-              <el-form-item>
-                <el-button type="primary" @click="handleUpdateProfile">保存更改</el-button>
-              </el-form-item>
-            </el-form>
-          </div>
-        </el-tab-pane>
-
-        <el-tab-pane label="账户安全" name="security">
-          <div class="tab-content">
-            <h3>修改密码</h3>
-            <el-form :model="passwordForm" :rules="passwordRules" ref="passwordFormRef" label-width="120px">
-              <el-form-item label="当前密码" prop="old_password">
-                <el-input type="password" v-model="passwordForm.old_password" show-password></el-input>
-              </el-form-item>
-              <el-form-item label="新密码" prop="new_password">
-                <el-input type="password" v-model="passwordForm.new_password" show-password></el-input>
-              </el-form-item>
-              <el-form-item label="确认新密码" prop="confirm_password">
-                <el-input type="password" v-model="passwordForm.confirm_password" show-password></el-input>
-              </el-form-item>
-              <el-form-item>
-                <el-button type="primary" @click="handleChangePassword">确认修改密码</el-button>
-              </el-form-item>
-            </el-form>
-          </div>
+      
+      <el-tabs v-model="activeTab">
+        <!-- 基本信息设置 -->
+        <el-tab-pane label="基本信息" name="basic-info">
+          <el-form 
+            ref="basicInfoFormRef" 
+            :model="basicInfoForm" 
+            :rules="basicInfoRules" 
+            label-width="120px"
+            v-loading="loading.basicInfo"
+          >
+            <el-form-item label="邮箱地址" prop="email">
+              <el-input v-model="basicInfoForm.email" placeholder="您的邮箱地址" />
+            </el-form-item>
+            
+            <!-- 根据需要添加其他基本字段 -->
+            
+            <el-form-item>
+              <el-button type="primary" @click="updateBasicInfo">保存修改</el-button>
+            </el-form-item>
+          </el-form>
         </el-tab-pane>
         
-        <!-- <el-tab-pane label="实名认证" name="verification" v-if="shouldShowVerificationTab">
-            <div class="tab-content">
-                <h3>实名认证状态</h3>
-                <p v-if="userStore.user?.verification_status === 'verified'">状态：已认证</p>
-                <p v-else-if="userStore.user?.verification_status === 'pending'">状态：认证审核中</p>
-                <p v-else-if="userStore.user?.verification_status === 'failed'">状态：认证失败 (原因: {{ userStore.user?.verification_failure_reason || '未提供' }})</p>
-                <p v-else>状态：未认证</p>
-                
-                <el-button 
-                    type="primary" 
-                    @click="goToVerificationPage"
-                    v-if="userStore.user?.verification_status !== 'verified' && userStore.user?.verification_status !== 'pending'"
-                >
-                    {{ userStore.user?.verification_status === 'failed' ? '重新提交认证' : '去认证' }}
-                </el-button>
-                 <p class="hint-text">根据平台要求，完成实名认证有助于提升账户安全性和可信度。</p>
+        <!-- 密码修改 -->
+        <el-tab-pane label="修改密码" name="change-password">
+          <el-form 
+            ref="passwordFormRef" 
+            :model="passwordForm" 
+            :rules="passwordRules" 
+            label-width="120px"
+            v-loading="loading.password"
+          >
+            <el-form-item label="当前密码" prop="old_password">
+              <el-input 
+                v-model="passwordForm.old_password" 
+                type="password" 
+                placeholder="请输入当前密码" 
+                show-password
+              />
+            </el-form-item>
+            <el-form-item label="新密码" prop="new_password">
+              <el-input 
+                v-model="passwordForm.new_password" 
+                type="password" 
+                placeholder="请输入新密码" 
+                show-password
+              />
+            </el-form-item>
+            <el-form-item label="确认新密码" prop="confirm_password">
+              <el-input 
+                v-model="passwordForm.confirm_password" 
+                type="password" 
+                placeholder="请再次输入新密码" 
+                show-password
+              />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" @click="changePassword">确认修改</el-button>
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
+        
+        <!-- 角色切换 -->
+        <el-tab-pane label="角色切换" name="switch-role">
+          <div class="role-switch-container" v-loading="loading.roleSwitch">
+            <p class="current-role">当前角色: <strong>{{ formatRole(authStore.user?.current_role) }}</strong></p>
+            
+            <div class="role-options">
+              <el-radio-group v-model="selectedRole" @change="handleRoleSelect">
+                <el-radio label="freelancer">零工</el-radio>
+                <el-radio label="employer">雇主</el-radio>
+              </el-radio-group>
             </div>
-        </el-tab-pane> -->
-
+            
+            <div class="role-actions">
+              <el-button 
+                type="primary" 
+                @click="switchRole" 
+                :disabled="!selectedRole || selectedRole === authStore.user?.current_role"
+              >
+                切换到{{ formatRole(selectedRole) }}角色
+              </el-button>
+            </div>
+          </div>
+        </el-tab-pane>
       </el-tabs>
     </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
-import { useAuthStore } from '@/stores/auth'
-import { ElMessage } from 'element-plus'
-import type { FormInstance, FormRules } from 'element-plus'
-import { useRouter } from 'vue-router'
+import { ref, reactive, onMounted, computed } from 'vue';
+import { ElMessage, FormInstance } from 'element-plus';
+import apiClient from '@/utils/apiClient';
+import { useAuthStore } from '@/stores/auth';
 
-const authStore = useAuthStore()
-const router = useRouter()
+// 状态和引用
+const activeTab = ref('basic-info');
+const basicInfoFormRef = ref<FormInstance>();
+const passwordFormRef = ref<FormInstance>();
+const authStore = useAuthStore();
+const selectedRole = ref('');
 
-const activeTab = ref('profile')
+// 加载状态
+const loading = reactive({
+  basicInfo: false,
+  password: false,
+  roleSwitch: false
+});
 
-// --- Profile Form ---
-const profileFormRef = ref<FormInstance>()
-const profileForm = reactive({
-  email: '',
-  nickname: '',
-})
+// 表单数据
+const basicInfoForm = reactive({
+  email: ''
+});
 
-const profileRules = reactive<FormRules>({
-  email: [
-    { type: 'email', message: '请输入有效的邮箱地址', trigger: ['blur', 'change'] },
-  ],
-  nickname: [
-    { min: 2, max: 20, message: '昵称长度应为 2-20 个字符', trigger: 'blur' }
-  ]
-})
-
-// --- Password Form ---
-const passwordFormRef = ref<FormInstance>()
 const passwordForm = reactive({
   old_password: '',
   new_password: '',
-  confirm_password: '',
-})
+  confirm_password: ''
+});
 
-const validatePassConfirm = (rule: any, value: any, callback: any) => {
-  if (value === '') {
-    callback(new Error('请再次输入新密码'))
-  } else if (value !== passwordForm.new_password) {
-    callback(new Error('两次输入的新密码不一致'))
-  } else {
-    callback()
-  }
-}
+// 表单验证规则
+const basicInfoRules = {
+  email: [
+    { required: true, message: '请输入邮箱地址', trigger: 'blur' },
+    { type: 'email', message: '请输入有效的邮箱地址', trigger: 'blur' }
+  ]
+};
 
-const passwordRules = reactive<FormRules>({
+const passwordRules = {
   old_password: [
     { required: true, message: '请输入当前密码', trigger: 'blur' },
+    { min: 6, message: '密码至少6个字符', trigger: 'blur' }
   ],
   new_password: [
     { required: true, message: '请输入新密码', trigger: 'blur' },
-    { min: 6, message: '密码长度至少为6位', trigger: 'blur' },
+    { min: 6, message: '密码至少6个字符', trigger: 'blur' }
   ],
   confirm_password: [
-    { required: true, validator: validatePassConfirm, trigger: 'blur' },
-  ],
-})
-
-const userRoleDisplay = computed(() => {
-  if (!authStore.user) return '未知'
-  const roleMap: { [key: string]: string } = {
-    'freelancer': '零工',
-    'employer': '雇主',
-    'admin': '管理员'
-  }
-  return roleMap[authStore.user.current_role] || authStore.user.current_role
-})
-
-onMounted(() => {
-  if (authStore.user) {
-    profileForm.email = authStore.user.email || ''
-    profileForm.nickname = authStore.user.nickname || ''
-  } else {
-    ElMessage.warning('无法加载用户信息，请稍后重试或重新登录。')
-  }
-})
-
-const handleUpdateProfile = async () => {
-  if (!profileFormRef.value) return
-  await profileFormRef.value.validate(async (valid) => {
-    if (valid) {
-      try {
-        const updateData: { email?: string; nickname?: string } = {}
-        if (profileForm.email !== authStore.user?.email) {
-          updateData.email = profileForm.email
-        }
-        if (profileForm.nickname !== authStore.user?.nickname) {
-          updateData.nickname = profileForm.nickname
-        }
-
-        if (Object.keys(updateData).length === 0) {
-          ElMessage.info('信息未发生变化。')
-          return
-        }
-
-        // 调用 authStore 的方法更新用户信息
-        await authStore.getCurrentUser()
-
-        if (authStore.user) {
-          ElMessage.success('个人资料更新成功！')
+    { required: true, message: '请再次输入新密码', trigger: 'blur' },
+    { min: 6, message: '密码至少6个字符', trigger: 'blur' },
+    {
+      validator: (rule: any, value: string, callback: any) => {
+        if (value !== passwordForm.new_password) {
+          callback(new Error('两次输入的密码不一致'));
         } else {
-          ElMessage.error('个人资料更新失败，请重试。')
+          callback();
         }
-      } catch (error: any) {
-        console.error('更新个人资料失败:', error)
-        ElMessage.error(error.message || '更新个人资料失败，请稍后重试。')
+      },
+      trigger: 'blur'
+    }
+  ]
+};
+
+// 初始化用户信息
+const fetchUserInfo = async () => {
+  try {
+    const response = await apiClient.get('users/me');
+    
+    // 填充表单
+    basicInfoForm.email = response.data.email || '';
+    
+    // 设置当前角色
+    selectedRole.value = authStore.user?.current_role || '';
+  } catch (error) {
+    console.error('获取用户信息失败:', error);
+  }
+};
+
+// 更新基本信息
+const updateBasicInfo = async () => {
+  if (!basicInfoFormRef.value) return;
+  
+  await basicInfoFormRef.value.validate(async (valid) => {
+    if (valid) {
+      loading.basicInfo = true;
+      try {
+        const response = await apiClient.put('users/me', basicInfoForm);
+        
+        // 更新Pinia store中的用户信息
+        if (authStore.user) {
+          authStore.user = { ...authStore.user, ...response.data };
+        }
+        
+        ElMessage.success('基本信息更新成功');
+      } catch (error) {
+        console.error('更新基本信息失败:', error);
+      } finally {
+        loading.basicInfo = false;
       }
     }
-  })
-}
+  });
+};
 
-const handleChangePassword = async () => {
-  if (!passwordFormRef.value) return
+// 修改密码
+const changePassword = async () => {
+  if (!passwordFormRef.value) return;
+  
   await passwordFormRef.value.validate(async (valid) => {
     if (valid) {
+      loading.password = true;
       try {
-        // 调用 authStore 的方法修改密码
-        await authStore.getCurrentUser()
-
-        if (authStore.user) {
-          ElMessage.success('密码修改成功！建议重新登录。')
-          passwordForm.old_password = ''
-          passwordForm.new_password = ''
-          passwordForm.confirm_password = ''
-        } else {
-          ElMessage.error('密码修改失败，请检查当前密码是否正确。')
-        }
-      } catch (error: any) {
-        console.error('修改密码失败:', error)
-        ElMessage.error(error.message || '修改密码失败，请稍后重试。')
+        await apiClient.post('users/me/change-password', {
+          old_password: passwordForm.old_password,
+          new_password: passwordForm.new_password
+        });
+        
+        ElMessage.success('密码修改成功');
+        
+        // 清空表单
+        passwordForm.old_password = '';
+        passwordForm.new_password = '';
+        passwordForm.confirm_password = '';
+      } catch (error) {
+        console.error('修改密码失败:', error);
+      } finally {
+        loading.password = false;
       }
     }
-  })
-}
+  });
+};
+
+// 角色选择
+const handleRoleSelect = (value: string) => {
+  selectedRole.value = value;
+};
+
+// 切换角色
+const switchRole = async () => {
+  if (!selectedRole.value || selectedRole.value === authStore.user?.current_role) {
+    return;
+  }
+  
+  loading.roleSwitch = true;
+  try {
+    const response = await apiClient.put('users/me/role', {
+      current_role: selectedRole.value
+    });
+    
+    // 更新Pinia store中的用户角色
+    if (authStore.user) {
+      authStore.user = { ...authStore.user, ...response.data };
+    }
+    
+    ElMessage.success(`已切换到${formatRole(selectedRole.value)}角色`);
+  } catch (error) {
+    console.error('切换角色失败:', error);
+  } finally {
+    loading.roleSwitch = false;
+  }
+};
+
+// 角色格式化显示
+const formatRole = (role?: string): string => {
+  if (!role) return '未知';
+  return role === 'freelancer' ? '零工' : role === 'employer' ? '雇主' : role;
+};
+
+// 页面加载
+onMounted(() => {
+  fetchUserInfo();
+});
 </script>
 
 <style scoped>
 .page-container {
-  padding: 20px;
-  max-width: 900px;
+  max-width: 800px;
   margin: 20px auto;
+  padding: 0 15px;
+}
+
+.settings-card {
+  margin-bottom: 20px;
 }
 
 .card-header {
-  font-size: 1.2em;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.card-header h1 {
+  font-size: 1.5em;
   font-weight: bold;
+  margin: 0;
 }
 
-.settings-tabs .el-tabs__header {
+.role-switch-container {
+  padding: 20px 0;
+}
+
+.current-role {
+  margin-bottom: 20px;
+  font-size: 16px;
+}
+
+.role-options {
   margin-bottom: 20px;
 }
 
-.tab-content {
-  padding: 20px;
-}
-
-.tab-content h3 {
-  margin-bottom: 20px;
-  font-size: 1.1em;
-  color: #303133;
-}
-
-.el-form {
-  max-width: 500px;
-}
-
-.hint-text {
-  font-size: 0.9em;
-  color: #909399;
-  margin-top: 15px;
+.role-actions {
+  margin-top: 30px;
 }
 </style>

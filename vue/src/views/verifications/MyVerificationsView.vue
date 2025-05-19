@@ -188,6 +188,7 @@ import axios from 'axios';
 import { ElMessage } from 'element-plus';
 import { useAuthStore } from '@/stores/auth';
 import apiConfig from '@/utils/apiConfig';
+import apiClient from '@/utils/apiClient';
 
 // 路由和认证
 const router = useRouter();
@@ -212,27 +213,16 @@ const filterParams = reactive({
 const fetchVerifications = async () => {
   loading.value = true;
   try {
-    const response = await axios.get(
-      apiConfig.getApiUrl('verifications/me'), 
-      {
-        params: filterParams,
-        headers: {
-          'Authorization': `Bearer ${authStore.token}`
-        }
-      }
-    );
-
-    if (response.data.code === 0) {
-      const data = response.data.data;
-      verifications.value = data.items;
-      totalItems.value = data.total_items;
-      totalPages.value = data.total_pages;
-    } else {
-      ElMessage.error(response.data.message || '获取认证记录失败');
-    }
+    const response = await apiClient.get('verifications/me', { params: filterParams });
+    
+    // apiClient已处理成功响应
+    const data = response.data;
+    verifications.value = data.items;
+    totalItems.value = data.pagination.total_items;
+    totalPages.value = data.pagination.total_pages;
   } catch (error: any) {
     console.error('获取认证记录失败:', error);
-    ElMessage.error(error.response?.data?.message || '获取认证记录失败，请稍后重试');
+    // apiClient已处理错误消息
   } finally {
     loading.value = false;
   }

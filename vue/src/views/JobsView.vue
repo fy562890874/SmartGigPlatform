@@ -238,37 +238,37 @@ const fetchJobs = async () => {
   loading.value = true;
   error.value = null;
   try {
-    const [sortBy, sortOrder] = filters.sortOption.split('_');
+    const [sortField, sortOrder] = filters.sortOption.split('_');
 
     const params: Record<string, any> = {
       page: pagination.value.page,
       per_page: pagination.value.per_page,
-      sort_by: sortBy,
-      sort_order: sortOrder,
+      sort_by: filters.sortOption // 后端处理完整的sort_by参数
     };
-    if (filters.keyword) params.q = filters.keyword; // Map 'keyword' to 'q'
-    if (filters.category) params.job_category = filters.category; // Map 'category' to 'job_category'
-    if (filters.status) params.status = filters.status;
-    if (filters.is_urgent === true) params.is_urgent = true;
+    
+    if (filters.keyword) params.q = filters.keyword; // 关键词搜索
+    if (filters.category) params.job_category = filters.category; // 职位类别
+    if (filters.status) params.status = filters.status; // 状态筛选
+    if (filters.is_urgent === true) params.is_urgent = true; // 紧急招聘
 
-    const response = await apiClient.get<PaginatedJobsResponse>('/jobs/', { params });
+    const response = await apiClient.get('jobs', { params });
+    
+    // apiClient已处理成功响应
     jobs.value = response.data.items;
-    if (response.data.pagination) {
-      pagination.value = {
-        ...response.data.pagination,
-        per_page: response.data.pagination.per_page || pagination.value.per_page,
-      };
-    } else {
-      pagination.value.total_items = response.data.items.length;
-      pagination.value.total_pages = Math.ceil(pagination.value.total_items / pagination.value.per_page);
-    }
+    
+    // 更新分页信息
+    pagination.value = {
+      page: response.data.pagination.page,
+      per_page: response.data.pagination.per_page,
+      total_items: response.data.pagination.total_items,
+      total_pages: response.data.pagination.total_pages
+    };
   } catch (err: any) {
-    console.error('Failed to fetch jobs:', err);
-    const errorMessage = err.response?.data?.message || err.message || '获取工作列表失败，请稍后再试。';
-    error.value = errorMessage;
-    if (errorMessage) ElMessage.error(errorMessage);
+    console.error('获取工作列表失败:', err);
+    error.value = '获取工作列表失败，请稍后再试';
     jobs.value = [];
     pagination.value = { page: 1, per_page: 9, total_items: 0, total_pages: 0 };
+    // 错误已由apiClient处理
   } finally {
     loading.value = false;
   }
