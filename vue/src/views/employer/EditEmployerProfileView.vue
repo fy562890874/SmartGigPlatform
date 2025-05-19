@@ -1,94 +1,222 @@
+<!--
+  @file EditEmployerProfileView.vue
+  @description 雇主用户编辑个人档案页面
+  @author Fy
+  @date 2023-05-23
+-->
 <template>
   <div class="edit-employer-profile page-container">
     <el-card shadow="never">
       <template #header>
         <div class="card-header">
-          <span>{{ isEditing ? '编辑' : '创建' }}雇主档案</span>
-          <el-button @click="router.back()">返回</el-button>
+          <h1>编辑雇主档案</h1>
         </div>
       </template>
-
-      <div v-if="loadingInitialData" class="loading-state">
-        <el-skeleton :rows="15" animated />
+      
+      <div v-if="loading.profile" class="loading-state">
+        <el-skeleton :rows="10" animated />
       </div>
-      <el-form 
-        v-else
-        :model="profileForm"
-        :rules="profileRules" 
-        ref="profileFormRef" 
-        label-width="150px"
-        label-position="right"
-        class="profile-form"
-      >
-        <el-form-item label="档案类型" prop="profile_type">
-          <el-radio-group v-model="profileForm.profile_type" @change="handleProfileTypeChange">
-            <el-radio label="individual">个人雇主</el-radio>
-            <el-radio label="company">企业雇主</el-radio>
-          </el-radio-group>
-        </el-form-item>
-
-        <el-form-item label="昵称/简称" prop="nickname">
-          <el-input v-model="profileForm.nickname" placeholder="您的昵称或公司简称"></el-input>
-        </el-form-item>
-
-        <el-form-item :label="profileForm.profile_type === 'individual' ? '真实姓名' : '法人/联系人姓名'" prop="real_name">
-          <el-input v-model="profileForm.real_name" :placeholder="profileForm.profile_type === 'individual' ? '您的真实姓名' : '公司法人或主要联系人姓名'"></el-input>
-        </el-form-item>
-
-        <el-form-item label="头像/Logo URL" prop="avatar_url">
-          <el-input v-model="profileForm.avatar_url" placeholder="可粘贴图片链接">
-             <template #append v-if="profileForm.avatar_url">
-                <el-avatar shape="square" size="small" :src="profileForm.avatar_url" />
-            </template>
-          </el-input>
-          <!-- TODO: 考虑支持文件上传 -->
-        </el-form-item>
-
-        <el-form-item label="联系电话" prop="contact_phone">
-          <el-input v-model="profileForm.contact_phone" placeholder="用于接收通知和沟通"></el-input>
-        </el-form-item>
-
-        <el-form-item label="所在省份" prop="location_province">
-          <el-input v-model="profileForm.location_province" placeholder="例如：北京市"></el-input>
-        </el-form-item>
-        <el-form-item label="所在城市" prop="location_city">
-          <el-input v-model="profileForm.location_city" placeholder="例如：北京市"></el-input>
-        </el-form-item>
-        <el-form-item label="所在区县" prop="location_district">
-          <el-input v-model="profileForm.location_district" placeholder="例如：朝阳区 (可选)"></el-input>
-        </el-form-item>
-
-        <template v-if="profileForm.profile_type === 'company'">
-          <el-divider content-position="left">企业信息 (企业雇主必填)</el-divider>
-          <el-form-item label="公司全称" prop="company_name">
-            <el-input v-model="profileForm.company_name" placeholder="请输入公司完整名称"></el-input>
-          </el-form-item>
-          <el-form-item label="统一社会信用代码" prop="business_license_number">
-            <el-input v-model="profileForm.business_license_number" placeholder="18位统一社会信用代码"></el-input>
-          </el-form-item>
-          <el-form-item label="公司地址" prop="company_address">
-            <el-input v-model="profileForm.company_address" placeholder="请输入公司详细办公地址"></el-input>
-          </el-form-item>
-          <el-form-item label="公司简介" prop="company_description">
-            <el-input type="textarea" :rows="3" v-model="profileForm.company_description" placeholder="简要介绍一下您的公司"></el-input>
-          </el-form-item>
-          <el-form-item label="营业执照照片URL" prop="business_license_photo_url">
-            <el-input v-model="profileForm.business_license_photo_url" placeholder="请上传营业执照照片并填写链接">
-                <template #append v-if="profileForm.business_license_photo_url">
-                    <el-image style="width: 30px; height: 30px" :src="profileForm.business_license_photo_url" :preview-src-list="[profileForm.business_license_photo_url]" fit="cover" />
-                </template>
-            </el-input>
-            <!-- TODO: 考虑支持文件上传 -->
-          </el-form-item>
-        </template>
+      
+      <el-tabs v-else v-model="activeTab" class="profile-tabs">
+        <!-- 基本信息 -->
+        <el-tab-pane label="基本信息" name="basic">
+          <el-form 
+            ref="basicFormRef" 
+            :model="profileForm.basic" 
+            :rules="basicRules" 
+            label-width="120px"
+            class="profile-form"
+          >
+            <el-form-item label="雇主类型" prop="profile_type">
+              <el-radio-group v-model="profileForm.basic.profile_type" :disabled="profileLoaded">
+                <el-radio label="individual">个人雇主</el-radio>
+                <el-radio label="company">企业雇主</el-radio>
+              </el-radio-group>
+            </el-form-item>
+            
+            <el-form-item label="真实姓名" prop="real_name">
+              <el-input v-model="profileForm.basic.real_name" placeholder="请输入真实姓名" />
+            </el-form-item>
+            
+            <el-form-item label="显示昵称" prop="nickname">
+              <el-input v-model="profileForm.basic.nickname" placeholder="请输入您希望展示的昵称" />
+            </el-form-item>
+            
+            <el-form-item label="联系邮箱" prop="contact_email">
+              <el-input v-model="profileForm.basic.contact_email" placeholder="请输入联系邮箱" />
+            </el-form-item>
+            
+            <el-form-item label="联系电话" prop="contact_phone">
+              <el-input v-model="profileForm.basic.contact_phone" placeholder="请输入联系电话" />
+            </el-form-item>
+            
+            <el-form-item label="常驻省份" prop="location_province">
+              <el-input v-model="profileForm.basic.location_province" placeholder="例如：浙江省" />
+            </el-form-item>
+            
+            <el-form-item label="常驻城市" prop="location_city">
+              <el-input v-model="profileForm.basic.location_city" placeholder="例如：杭州市" />
+            </el-form-item>
+            
+            <el-form-item label="常驻区县" prop="location_district">
+              <el-input v-model="profileForm.basic.location_district" placeholder="例如：西湖区" />
+            </el-form-item>
+            
+            <el-form-item label="详细地址" prop="location_address">
+              <el-input 
+                v-model="profileForm.basic.location_address" 
+                type="textarea" 
+                :rows="2" 
+                placeholder="请输入详细地址"
+              />
+            </el-form-item>
+            
+            <el-form-item label="头像">
+              <el-upload
+                class="avatar-uploader"
+                action="#"
+                :http-request="uploadAvatar"
+                :show-file-list="false"
+                accept="image/jpeg,image/png,image/jpg"
+              >
+                <img v-if="profileForm.basic.avatar_url" :src="profileForm.basic.avatar_url" class="avatar" />
+                <el-icon v-else class="avatar-uploader-icon"><Plus /></el-icon>
+              </el-upload>
+              <div class="upload-hint">点击上传头像（JPG/PNG格式，最大2MB）</div>
+            </el-form-item>
+            
+            <el-form-item>
+              <el-button type="primary" @click="saveBasicInfo" :loading="loading.saveBasic">保存基本信息</el-button>
+              <el-button @click="resetBasicForm">重置</el-button>
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
         
-        <el-form-item>
-          <el-button type="primary" @click="submitProfileForm" :loading="submitting">
-            {{ isEditing ? '保存更新' : '创建档案' }}
-          </el-button>
-          <el-button @click="resetForm">重置表单</el-button>
-        </el-form-item>
-      </el-form>
+        <!-- 企业信息（仅企业雇主显示） -->
+        <el-tab-pane 
+          v-if="profileForm.basic.profile_type === 'company'" 
+          label="企业信息" 
+          name="company"
+        >
+          <el-form 
+            ref="companyFormRef" 
+            :model="profileForm.company" 
+            :rules="companyRules" 
+            label-width="150px"
+            class="profile-form"
+          >
+            <el-form-item label="公司名称" prop="company_name">
+              <el-input v-model="profileForm.company.company_name" placeholder="请输入公司名称" />
+            </el-form-item>
+            
+            <el-form-item label="统一社会信用代码" prop="business_license_number">
+              <el-input v-model="profileForm.company.business_license_number" placeholder="请输入统一社会信用代码" />
+            </el-form-item>
+            
+            <el-form-item label="公司详细地址" prop="company_address">
+              <el-input 
+                v-model="profileForm.company.company_address" 
+                type="textarea" 
+                :rows="2" 
+                placeholder="请输入公司详细地址"
+              />
+            </el-form-item>
+            
+            <el-form-item label="公司简介" prop="company_description">
+              <el-input 
+                v-model="profileForm.company.company_description" 
+                type="textarea" 
+                :rows="4" 
+                placeholder="请简要介绍公司情况..."
+              />
+            </el-form-item>
+            
+            <el-form-item label="营业执照照片" prop="business_license_photo">
+              <el-upload
+                class="license-uploader"
+                action="#"
+                :http-request="uploadLicensePhoto"
+                :show-file-list="false"
+                accept="image/jpeg,image/png,image/jpg"
+              >
+                <img 
+                  v-if="profileForm.company.business_license_photo_url" 
+                  :src="profileForm.company.business_license_photo_url" 
+                  class="license-photo" 
+                />
+                <div v-else class="upload-placeholder">
+                  <el-icon class="upload-icon"><Plus /></el-icon>
+                  <div>点击上传营业执照</div>
+                </div>
+              </el-upload>
+              <div class="upload-hint">请上传清晰的营业执照照片（JPG/PNG格式，最大5MB）</div>
+            </el-form-item>
+            
+            <el-form-item>
+              <el-button type="primary" @click="saveCompanyInfo" :loading="loading.saveCompany">保存企业信息</el-button>
+              <el-button @click="resetCompanyForm">重置</el-button>
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
+        
+        <!-- 简介与描述 -->
+        <el-tab-pane label="简介与描述" name="description">
+          <el-form 
+            ref="descFormRef" 
+            :model="profileForm.description" 
+            :rules="descriptionRules" 
+            label-width="120px"
+            class="profile-form"
+          >
+            <el-form-item label="自我介绍" prop="bio">
+              <el-input 
+                v-model="profileForm.description.bio" 
+                type="textarea" 
+                :rows="6" 
+                placeholder="简要介绍您的背景、行业经验等..."
+              />
+            </el-form-item>
+            
+            <el-form-item label="招聘偏好" prop="hiring_preference">
+              <el-input 
+                v-model="profileForm.description.hiring_preference" 
+                type="textarea" 
+                :rows="4" 
+                placeholder="描述您在招聘方面的偏好，例如希望招聘什么类型的人才..."
+              />
+            </el-form-item>
+            
+            <el-form-item>
+              <el-button type="primary" @click="saveDescription" :loading="loading.saveDesc">保存简介</el-button>
+              <el-button @click="resetDescForm">重置</el-button>
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
+        
+        <!-- 联系方式与链接 -->
+        <el-tab-pane label="联系与链接" name="contacts">
+          <el-form 
+            ref="contactsFormRef" 
+            :model="profileForm.contacts" 
+            :rules="contactsRules" 
+            label-width="120px"
+            class="profile-form"
+          >
+            <el-form-item label="官方网站" prop="website_url">
+              <el-input v-model="profileForm.contacts.website_url" placeholder="https://example.com" />
+            </el-form-item>
+            
+            <el-form-item label="LinkedIn" prop="linkedin_url">
+              <el-input v-model="profileForm.contacts.linkedin_url" placeholder="https://linkedin.com/in/yourname" />
+            </el-form-item>
+            
+            <el-form-item>
+              <el-button type="primary" @click="saveContacts" :loading="loading.saveContacts">保存联系信息</el-button>
+              <el-button @click="resetContactsForm">重置</el-button>
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
+      </el-tabs>
     </el-card>
   </div>
 </template>
@@ -96,286 +224,458 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import axios from 'axios';
-import { ElMessage, FormInstance, FormRules } from 'element-plus';
+import { ElMessage, FormInstance } from 'element-plus';
+import { Plus } from '@element-plus/icons-vue';
 import { useAuthStore } from '@/stores/auth';
-import apiConfig from '@/utils/apiConfig';
+import apiClient from '@/utils/apiClient';
 
+// 路由与状态管理
 const router = useRouter();
 const authStore = useAuthStore();
-const profileFormRef = ref<FormInstance>();
-const loadingInitialData = ref(true);
-const submitting = ref(false);
-const isEditing = ref(false);
 
-// 表单数据
+// 表单引用
+const basicFormRef = ref<FormInstance>();
+const companyFormRef = ref<FormInstance>();
+const descFormRef = ref<FormInstance>();
+const contactsFormRef = ref<FormInstance>();
+
+// 标签页状态
+const activeTab = ref('basic');
+
+// 加载状态
+const loading = reactive({
+  profile: true,
+  saveBasic: false,
+  saveCompany: false,
+  saveDesc: false,
+  saveContacts: false
+});
+
+// 是否已加载档案
+const profileLoaded = ref(false);
+
+// 个人档案表单数据
 const profileForm = reactive({
-  profile_type: 'individual',
-  nickname: '',
-  real_name: '',
-  avatar_url: '',
-  contact_phone: '',
-  location_province: '',
-  location_city: '',
-  location_district: '',
-  company_name: '',
-  business_license_number: '',
-  company_address: '',
-  company_description: '',
-  business_license_photo_url: ''
+  basic: {
+    profile_type: 'individual',
+    real_name: '',
+    nickname: '',
+    contact_email: '',
+    contact_phone: '',
+    location_province: '',
+    location_city: '',
+    location_district: '',
+    location_address: '',
+    avatar_url: ''
+  },
+  company: {
+    company_name: '',
+    business_license_number: '',
+    company_address: '',
+    company_description: '',
+    business_license_photo_url: ''
+  },
+  description: {
+    bio: '',
+    hiring_preference: ''
+  },
+  contacts: {
+    website_url: '',
+    linkedin_url: ''
+  }
 });
 
 // 表单验证规则
-const profileRules = reactive<FormRules>({
+const basicRules = {
   profile_type: [
-    { required: true, message: '请选择档案类型', trigger: 'change' }
+    { required: true, message: '请选择雇主类型', trigger: 'change' }
   ],
   real_name: [
     { required: true, message: '请输入真实姓名', trigger: 'blur' }
   ],
-  contact_phone: [
-    { 
-      pattern: /^1[3-9]\d{9}$/,
-      message: '请输入有效的手机号码',
-      trigger: 'blur' 
-    }
+  nickname: [
+    { required: true, message: '请输入显示昵称', trigger: 'blur' }
   ],
+  contact_email: [
+    { type: 'email', message: '请输入有效的邮箱地址', trigger: 'blur' }
+  ],
+  contact_phone: [
+    { pattern: /^1[3-9]\d{9}$/, message: '请输入有效的手机号码', trigger: 'blur' }
+  ]
+};
+
+const companyRules = {
   company_name: [
-    { 
-      required: true, 
-      message: '请输入公司名称', 
-      trigger: 'blur',
-      // 仅当档案类型为company时验证
-      validator: (rule, value, callback) => {
-        if (profileForm.profile_type === 'company' && !value) {
-          callback(new Error('企业雇主必须填写公司名称'));
-        } else {
-          callback();
-        }
-      }
-    }
+    { required: true, message: '请输入公司名称', trigger: 'blur' }
   ],
   business_license_number: [
-    {
-      required: true,
-      message: '请输入统一社会信用代码',
-      trigger: 'blur',
-      validator: (rule, value, callback) => {
-        if (profileForm.profile_type === 'company' && !value) {
-          callback(new Error('企业雇主必须填写统一社会信用代码'));
-        } else {
-          callback();
-        }
-      }
-    }
+    { required: true, message: '请输入统一社会信用代码', trigger: 'blur' }
+  ],
+  company_address: [
+    { required: true, message: '请输入公司详细地址', trigger: 'blur' }
   ]
-});
+};
 
-// 切换档案类型
-const handleProfileTypeChange = (value: string) => {
-  // 切换时可以添加一些额外逻辑，如清空公司相关字段等
-  if (value === 'individual') {
-    profileForm.company_name = '';
-    profileForm.business_license_number = '';
-    profileForm.company_address = '';
-    profileForm.company_description = '';
-    profileForm.business_license_photo_url = '';
+const descriptionRules = {
+  bio: [
+    { max: 1000, message: '简介长度应不超过1000个字符', trigger: 'blur' }
+  ],
+  hiring_preference: [
+    { max: 500, message: '招聘偏好长度应不超过500个字符', trigger: 'blur' }
+  ]
+};
+
+const contactsRules = {
+  website_url: [
+    { pattern: /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w.-]*)*\/?$/, message: '请输入有效的网址', trigger: 'blur' }
+  ],
+  linkedin_url: [
+    { pattern: /^(https?:\/\/)?(www\.)?linkedin\.com\/in\/[\w-]+\/?$/, message: '请输入有效的LinkedIn链接', trigger: 'blur' }
+  ]
+};
+
+// 获取雇主档案
+const fetchEmployerProfile = async () => {
+  loading.profile = true;
+  try {
+    const response = await apiClient.get('profiles/employer/me');
+    
+    // 填充基本信息表单
+    const profileData = response.data;
+    profileLoaded.value = true;
+    
+    // 基本信息
+    profileForm.basic.profile_type = profileData.profile_type || 'individual';
+    profileForm.basic.real_name = profileData.real_name || '';
+    profileForm.basic.nickname = profileData.nickname || '';
+    profileForm.basic.contact_email = profileData.contact_email || '';
+    profileForm.basic.contact_phone = profileData.contact_phone || '';
+    profileForm.basic.location_province = profileData.location_province || '';
+    profileForm.basic.location_city = profileData.location_city || '';
+    profileForm.basic.location_district = profileData.location_district || '';
+    profileForm.basic.location_address = profileData.location_address || '';
+    profileForm.basic.avatar_url = profileData.avatar_url || '';
+    
+    // 公司信息（如果是企业雇主）
+    if (profileData.profile_type === 'company') {
+      profileForm.company.company_name = profileData.company_name || '';
+      profileForm.company.business_license_number = profileData.business_license_number || '';
+      profileForm.company.company_address = profileData.company_address || '';
+      profileForm.company.company_description = profileData.company_description || '';
+      profileForm.company.business_license_photo_url = profileData.business_license_photo_url || '';
+    }
+    
+    // 简介与描述
+    profileForm.description.bio = profileData.bio || '';
+    profileForm.description.hiring_preference = profileData.hiring_preference || '';
+    
+    // 联系方式与链接
+    profileForm.contacts.website_url = profileData.website_url || '';
+    profileForm.contacts.linkedin_url = profileData.linkedin_url || '';
+    
+  } catch (error) {
+    console.error('获取雇主档案失败:', error);
+    // 如果是404错误，表示档案不存在，使用默认值
+    profileLoaded.value = false;
+  } finally {
+    loading.profile = false;
   }
 };
 
-// 获取现有档案数据
-const fetchProfileData = async () => {
-  loadingInitialData.value = true;
+// 上传头像
+const uploadAvatar = async (options: any) => {
+  const { file, onSuccess, onError } = options;
+  
+  if (file.size > 2 * 1024 * 1024) {
+    ElMessage.error('头像文件不能超过2MB');
+    onError('文件过大');
+    return;
+  }
   
   try {
-    // 构造API请求
-    const token = authStore.token;
-    if (!token) {
-      ElMessage.error('您尚未登录或登录已过期');
-      router.push('/login');
-      return;
-    }
+    // 创建一个FormData对象
+    const formData = new FormData();
+    formData.append('avatar', file);
     
-    // 使用axios直接请求API
-    const response = await axios.get(apiConfig.getApiUrl('profiles/employer/me'), {
+    const response = await apiClient.post('profiles/employer/me/avatar', formData, {
       headers: {
-        'Authorization': `Bearer ${token}`
+        'Content-Type': 'multipart/form-data'
       }
     });
     
-    // 处理响应数据
-    if (response.data && response.data.code === 0 && response.data.data) {
-      // API返回成功，用返回的数据填充表单
-      const profileData = response.data.data;
-      isEditing.value = true;
-      
-      // 填充表单数据
-      Object.keys(profileForm).forEach(key => {
-        if (key in profileData && profileData[key] !== null && profileData[key] !== undefined) {
-          profileForm[key as keyof typeof profileForm] = profileData[key];
-        }
-      });
-      
-    } else {
-      // API可能返回了成功状态但数据异常
-      isEditing.value = false;
-      ElMessage.info('您尚未创建雇主档案，请填写创建。');
-    }
-  } catch (error: any) {
-    console.error('获取雇主档案失败:', error);
-    
-    if (error.response && error.response.status === 404) {
-      // 404表示当前用户还没有雇主档案
-      isEditing.value = false;
-      ElMessage.info('您尚未创建雇主档案，请填写创建。');
-    } else {
-      // 其他错误
-      ElMessage.error(error.response?.data?.message || '获取档案信息失败，请稍后重试');
-    }
-  } finally {
-    loadingInitialData.value = false;
+    // 更新头像URL
+    profileForm.basic.avatar_url = response.data.avatar_url;
+    ElMessage.success('头像上传成功');
+    onSuccess(response);
+  } catch (error) {
+    console.error('头像上传失败:', error);
+    onError('上传失败');
   }
 };
 
-// 提交表单
-const submitProfileForm = async () => {
-  if (!profileFormRef.value) return;
+// 上传营业执照照片
+const uploadLicensePhoto = async (options: any) => {
+  const { file, onSuccess, onError } = options;
   
-  await profileFormRef.value.validate(async (valid, fields) => {
-    if (valid) {
-      submitting.value = true;
-      
-      try {
-        const token = authStore.token;
-        if (!token) {
-          ElMessage.error('您尚未登录或登录已过期');
-          router.push('/login');
-          return;
-        }
-        
-        // 准备要提交的数据
-        const payload = { ...profileForm };
-        
-        // 发送PUT请求创建或更新档案
-        const response = await axios.put('http://127.0.0.1:5000/api/v1/profiles/employer/me', payload, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (response.data && response.data.code === 0) {
-          // 请求成功
-          ElMessage.success(isEditing.value ? '雇主档案更新成功！' : '雇主档案创建成功！');
-          router.push('/employer/dashboard');
-        } else {
-          // 请求虽然返回但API报告错误
-          ElMessage.error(response.data?.message || '保存失败，请稍后重试');
-        }
-      } catch (error: any) {
-        console.error('保存雇主档案失败:', error);
-        let errorMsg = '保存失败，请稍后重试';
-        
-        if (error.response) {
-          const { status, data } = error.response;
-          
-          if (status === 400 && data.errors) {
-            // 处理验证错误
-            const validationErrors = Object.values(data.errors).flat().join('; ');
-            errorMsg = `表单验证失败: ${validationErrors}`;
-          } else if (data && data.message) {
-            errorMsg = data.message;
-          }
-        }
-        
-        ElMessage.error(errorMsg);
-      } finally {
-        submitting.value = false;
+  if (file.size > 5 * 1024 * 1024) {
+    ElMessage.error('营业执照照片不能超过5MB');
+    onError('文件过大');
+    return;
+  }
+  
+  try {
+    // 创建一个FormData对象
+    const formData = new FormData();
+    formData.append('license', file);
+    
+    const response = await apiClient.post('profiles/employer/me/license', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
       }
-    } else {
-      ElMessage.error('表单验证失败，请检查输入');
-      console.log('验证失败的字段:', fields);
+    });
+    
+    // 更新营业执照照片URL
+    profileForm.company.business_license_photo_url = response.data.business_license_photo_url;
+    ElMessage.success('营业执照照片上传成功');
+    onSuccess(response);
+  } catch (error) {
+    console.error('营业执照照片上传失败:', error);
+    onError('上传失败');
+  }
+};
+
+// 保存基本信息
+const saveBasicInfo = async () => {
+  if (!basicFormRef.value) return;
+  
+  await basicFormRef.value.validate(async (valid) => {
+    if (valid) {
+      loading.saveBasic = true;
+      try {
+        // 处理雇主类型，如果已经加载过档案，则不能修改雇主类型
+        const payload = { ...profileForm.basic };
+        if (profileLoaded.value) {
+          delete payload.profile_type;
+        }
+        
+        await apiClient.put('profiles/employer/me', payload);
+        ElMessage.success('基本信息保存成功');
+        
+        // 如果是新创建且选择了公司类型，自动切换到公司信息标签
+        if (!profileLoaded.value && profileForm.basic.profile_type === 'company') {
+          activeTab.value = 'company';
+          profileLoaded.value = true;
+        }
+      } catch (error) {
+        console.error('保存基本信息失败:', error);
+      } finally {
+        loading.saveBasic = false;
+      }
+    }
+  });
+};
+
+// 保存公司信息
+const saveCompanyInfo = async () => {
+  if (!companyFormRef.value) return;
+  
+  await companyFormRef.value.validate(async (valid) => {
+    if (valid) {
+      loading.saveCompany = true;
+      try {
+        await apiClient.put('profiles/employer/me', profileForm.company);
+        ElMessage.success('企业信息保存成功');
+      } catch (error) {
+        console.error('保存企业信息失败:', error);
+      } finally {
+        loading.saveCompany = false;
+      }
+    }
+  });
+};
+
+// 保存简介与描述
+const saveDescription = async () => {
+  if (!descFormRef.value) return;
+  
+  await descFormRef.value.validate(async (valid) => {
+    if (valid) {
+      loading.saveDesc = true;
+      try {
+        await apiClient.put('profiles/employer/me', profileForm.description);
+        ElMessage.success('简介与描述保存成功');
+      } catch (error) {
+        console.error('保存简介与描述失败:', error);
+      } finally {
+        loading.saveDesc = false;
+      }
+    }
+  });
+};
+
+// 保存联系方式与链接
+const saveContacts = async () => {
+  if (!contactsFormRef.value) return;
+  
+  await contactsFormRef.value.validate(async (valid) => {
+    if (valid) {
+      loading.saveContacts = true;
+      try {
+        await apiClient.put('profiles/employer/me', profileForm.contacts);
+        ElMessage.success('联系方式与链接保存成功');
+      } catch (error) {
+        console.error('保存联系方式与链接失败:', error);
+      } finally {
+        loading.saveContacts = false;
+      }
     }
   });
 };
 
 // 重置表单
-const resetForm = () => {
-  if (profileFormRef.value) {
-    profileFormRef.value.resetFields();
-  }
-  
-  // 如果是编辑模式，重新获取原始数据
-  if (isEditing.value) {
-    fetchProfileData();
-  } 
-  // 如果是创建模式，重置为默认值
-  else {
-    profileForm.profile_type = 'individual';
-    profileForm.nickname = '';
-    profileForm.real_name = '';
-    profileForm.avatar_url = '';
-    profileForm.contact_phone = '';
-    profileForm.location_province = '';
-    profileForm.location_city = '';
-    profileForm.location_district = '';
-    profileForm.company_name = '';
-    profileForm.business_license_number = '';
-    profileForm.company_address = '';
-    profileForm.company_description = '';
-    profileForm.business_license_photo_url = '';
+const resetBasicForm = () => {
+  if (basicFormRef.value) {
+    basicFormRef.value.resetFields();
   }
 };
 
-// 组件挂载时获取数据
-onMounted(() => {
-  // 检查用户是否登录
-  if (!authStore.isLoggedIn) {
-    ElMessage.warning('请先登录');
-    router.push('/login');
-    return;
+const resetCompanyForm = () => {
+  if (companyFormRef.value) {
+    companyFormRef.value.resetFields();
   }
-  
-  // 获取现有档案数据
-  fetchProfileData();
+};
+
+const resetDescForm = () => {
+  if (descFormRef.value) {
+    descFormRef.value.resetFields();
+  }
+};
+
+const resetContactsForm = () => {
+  if (contactsFormRef.value) {
+    contactsFormRef.value.resetFields();
+  }
+};
+
+// 组件挂载
+onMounted(() => {
+  if (authStore.isLoggedIn && authStore.user?.current_role === 'employer') {
+    fetchEmployerProfile();
+  } else {
+    ElMessage.warning('请先以雇主身份登录');
+    router.push('/login');
+  }
 });
 </script>
 
 <style scoped>
 .page-container {
-  padding: 20px;
-  max-width: 800px;
+  max-width: 1000px;
   margin: 20px auto;
+  padding: 0 15px;
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 1.2em;
+}
+
+.card-header h1 {
+  font-size: 1.5em;
   font-weight: bold;
+  margin: 0;
 }
 
 .loading-state {
-    padding: 20px;
+  min-height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.profile-tabs {
+  margin-top: 20px;
 }
 
 .profile-form {
-  padding: 20px 0;
+  max-width: 800px;
+  margin: 20px auto;
 }
 
-.el-form-item {
-    margin-bottom: 22px;
+.avatar-uploader {
+  border: 1px dashed #d9d9d9;
+  border-radius: 6px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  width: 178px;
+  height: 178px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.el-select, .el-date-picker {
-    width: 100%;
+.avatar-uploader:hover {
+  border-color: #409EFF;
 }
 
-.hint-text {
-  font-size: 0.85em;
+.avatar-uploader-icon {
+  font-size: 28px;
+  color: #8c939d;
+  width: 178px;
+  height: 178px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.license-uploader {
+  border: 1px dashed #d9d9d9;
+  border-radius: 6px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  width: 320px;
+  height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.license-uploader:hover {
+  border-color: #409EFF;
+}
+
+.license-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.upload-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #8c939d;
+}
+
+.upload-icon {
+  font-size: 36px;
+  margin-bottom: 10px;
+}
+
+.upload-hint {
+  font-size: 12px;
   color: #909399;
   margin-top: 5px;
-  line-height: 1.4;
 }
 </style>

@@ -1,363 +1,643 @@
+<!--
+  @file FreelancerDashboardView.vue
+  @description 零工用户的仪表盘页面，显示数据概览和快速操作
+  @author Fy
+  @date 2023-05-21
+-->
 <template>
   <div class="freelancer-dashboard page-container">
-    <el-card shadow="never">
+    <h1 class="page-title">零工工作台</h1>
+    
+    <!-- 数据概览卡片 -->
+    <el-row :gutter="20" class="stats-row">
+      <el-col :xs="24" :sm="12" :md="6">
+        <el-card shadow="hover" class="stats-card">
+          <div class="stats-content">
+            <div class="stats-value">{{ dashboardData.pending_applications || 0 }}</div>
+            <div class="stats-label">待处理申请</div>
+          </div>
+          <el-icon class="stats-icon" :size="40" color="#409EFF"><Document /></el-icon>
+        </el-card>
+      </el-col>
+      <el-col :xs="24" :sm="12" :md="6">
+        <el-card shadow="hover" class="stats-card">
+          <div class="stats-content">
+            <div class="stats-value">{{ dashboardData.active_orders || 0 }}</div>
+            <div class="stats-label">进行中订单</div>
+          </div>
+          <el-icon class="stats-icon" :size="40" color="#67C23A"><ShoppingCart /></el-icon>
+        </el-card>
+      </el-col>
+      <el-col :xs="24" :sm="12" :md="6">
+        <el-card shadow="hover" class="stats-card">
+          <div class="stats-content">
+            <div class="stats-value">{{ dashboardData.completed_orders || 0 }}</div>
+            <div class="stats-label">已完成订单</div>
+          </div>
+          <el-icon class="stats-icon" :size="40" color="#E6A23C"><CircleCheck /></el-icon>
+        </el-card>
+      </el-col>
+      <el-col :xs="24" :sm="12" :md="6">
+        <el-card shadow="hover" class="stats-card">
+          <div class="stats-content">
+            <div class="stats-value">{{ formatCurrency(dashboardData.total_earnings || 0) }}</div>
+            <div class="stats-label">总收入</div>
+          </div>
+          <el-icon class="stats-icon" :size="40" color="#F56C6C"><Money /></el-icon>
+        </el-card>
+      </el-col>
+    </el-row>
+    
+    <!-- 快速操作卡片 -->
+    <el-row :gutter="20" class="action-row">
+      <el-col :xs="24" :sm="8">
+        <el-card shadow="hover" class="action-card" @click="navigateTo('freelancer-profile')">
+          <template #header>
+            <div class="card-header">
+              <span>完善个人资料</span>
+              <el-icon><EditPen /></el-icon>
+            </div>
+          </template>
+          <div class="card-content">
+            <p v-if="profileComplete" class="status-complete">
+              <el-icon><CircleCheck /></el-icon> 您的个人资料已完善
+            </p>
+            <p v-else class="status-incomplete">
+              <el-icon><Warning /></el-icon> 完善您的个人资料以提高接单机会
+            </p>
+            <el-button type="primary" plain size="small">{{ profileComplete ? '查看资料' : '去完善' }}</el-button>
+          </div>
+        </el-card>
+      </el-col>
+      <el-col :xs="24" :sm="8">
+        <el-card shadow="hover" class="action-card" @click="navigateTo('manage-skills')">
+          <template #header>
+            <div class="card-header">
+              <span>管理技能</span>
+              <el-icon><Star /></el-icon>
+            </div>
+          </template>
+          <div class="card-content">
+            <p>已添加技能: <span class="highlight">{{ dashboardData.skills_count || 0 }}</span> 项</p>
+            <el-button type="primary" plain size="small">管理我的技能</el-button>
+          </div>
+        </el-card>
+      </el-col>
+      <el-col :xs="24" :sm="8">
+        <el-card shadow="hover" class="action-card" @click="navigateTo('verification')">
+          <template #header>
+            <div class="card-header">
+              <span>实名认证</span>
+              <el-icon><Lock /></el-icon>
+            </div>
+          </template>
+          <div class="card-content">
+            <p v-if="isVerified" class="status-complete">
+              <el-icon><CircleCheck /></el-icon> 已完成实名认证
+            </p>
+            <p v-else-if="verificationPending" class="status-pending">
+              <el-icon><Loading /></el-icon> 认证审核中
+            </p>
+            <p v-else class="status-incomplete">
+              <el-icon><Warning /></el-icon> 未完成实名认证
+            </p>
+            <el-button type="primary" plain size="small">
+              {{ isVerified ? '查看认证' : verificationPending ? '查看审核进度' : '去认证' }}
+            </el-button>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
+    
+    <!-- 最近工作申请 -->
+    <el-card shadow="hover" class="table-card">
       <template #header>
         <div class="card-header">
-          <span>我的仪表盘</span>
-          <div class="action-buttons">
-            <el-button type="primary" @click="goToEditProfile">编辑我的档案</el-button>
-            <el-button type="info" @click="router.push('/my-orders')">我的订单</el-button>
-          </div>
+          <span>最近申请的工作</span>
+          <el-button type="primary" text @click="navigateTo('my-applications')">查看全部</el-button>
         </div>
       </template>
-
-      <div v-if="loadingProfile || loadingSkills" class="loading-state">
-        <el-skeleton :rows="10" animated />
+      <div v-if="loading.applications" class="loading-container">
+        <el-skeleton :rows="3" animated />
       </div>
-      <el-empty description="您还没有创建零工档案。" v-else-if="!profileExists && !loadingProfile">
-        <el-button type="success" @click="goToEditProfile">创建我的零工档案</el-button>
-      </el-empty>
-      <div v-else-if="freelancerProfile" class="profile-details">
-        <el-descriptions title="基础信息" :column="2" border class="profile-section">
-          <el-descriptions-item label="真实姓名">{{ freelancerProfile.real_name || '未填写' }}</el-descriptions-item>
-          <el-descriptions-item label="昵称">{{ freelancerProfile.nickname || '未填写' }}</el-descriptions-item>
-          <el-descriptions-item label="性别">{{ formatGender(freelancerProfile.gender) }}</el-descriptions-item>
-          <el-descriptions-item label="出生日期">{{ freelancerProfile.birth_date || '未填写' }}</el-descriptions-item>
-          <el-descriptions-item label="邮箱">{{ freelancerProfile.contact_email || '未填写' }}</el-descriptions-item>
-          <el-descriptions-item label="电话">{{ freelancerProfile.contact_phone || '未填写' }}</el-descriptions-item>
-          <el-descriptions-item label="常驻省份">{{ freelancerProfile.location_province || '未填写' }}</el-descriptions-item>
-          <el-descriptions-item label="常驻城市">{{ freelancerProfile.location_city || '未填写' }}</el-descriptions-item>
-          <el-descriptions-item label="头像">
-            <el-avatar v-if="freelancerProfile.avatar_url" :size="60" :src="freelancerProfile.avatar_url" />
-            <span v-else>未上传</span>
-          </el-descriptions-item>
-           <el-descriptions-item label="档案验证状态">
-            <el-tag :type="getVerificationStatusType(freelancerProfile.verification_status)">
-              {{ formatVerificationStatus(freelancerProfile.verification_status) }}
+      <div v-else-if="recentApplications.length === 0" class="empty-container">
+        <el-empty description="暂无工作申请记录" />
+      </div>
+      <el-table v-else :data="recentApplications" style="width: 100%">
+        <el-table-column prop="job_info.title" label="工作标题">
+          <template #default="scope">
+            <el-link type="primary" @click="viewJobDetail(scope.row.job_info.id)">
+              {{ scope.row.job_info.title }}
+            </el-link>
+          </template>
+        </el-table-column>
+        <el-table-column prop="status" label="状态" width="120">
+          <template #default="scope">
+            <el-tag :type="getStatusType(scope.row.status)" size="small">
+              {{ formatStatus(scope.row.status) }}
             </el-tag>
-            <el-button 
-              v-if="freelancerProfile.verification_status !== 'verified' && freelancerProfile.verification_status !== 'pending'"
-              type="warning" 
-              size="small"
-              style="margin-left: 10px;"
-              @click="goToVerificationPage"
-            >
-              {{ freelancerProfile.verification_status === 'failed' ? '重新提交认证' : '去认证' }}
-            </el-button>
-          </el-descriptions-item>
-        </el-descriptions>
-
-        <div class="profile-section">
-          <h4>个人简介</h4>
-          <p class="bio-text">{{ freelancerProfile.bio || '暂无简介。' }}</p>
+          </template>
+        </el-table-column>
+        <el-table-column prop="created_at" label="申请时间" width="170">
+          <template #default="scope">
+            {{ formatDate(scope.row.created_at) }}
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
+    
+    <!-- 进行中的订单 -->
+    <el-card shadow="hover" class="table-card">
+      <template #header>
+        <div class="card-header">
+          <span>进行中的订单</span>
+          <el-button type="primary" text @click="navigateTo('my-orders')">查看全部</el-button>
         </div>
-        
-        <div class="profile-section">
-          <div class="section-header">
-            <h4>我的技能</h4>
-            <el-button type="text" @click="goToManageSkills">管理技能</el-button>
-          </div>
-          <div v-if="freelancerSkills.length">
-            <el-tag 
-              v-for="skill in freelancerSkills" 
-              :key="skill.id" 
-              class="skill-tag"
-              type="success"
-            >
-              {{ skill.skill_name }} ({{ skill.experience_level }})
+      </template>
+      <div v-if="loading.orders" class="loading-container">
+        <el-skeleton :rows="3" animated />
+      </div>
+      <div v-else-if="activeOrders.length === 0" class="empty-container">
+        <el-empty description="暂无进行中的订单" />
+      </div>
+      <el-table v-else :data="activeOrders" style="width: 100%">
+        <el-table-column prop="job.title" label="工作标题">
+          <template #default="scope">
+            <el-link type="primary" @click="viewJobDetail(scope.row.job_id)">
+              {{ scope.row.job.title }}
+            </el-link>
+          </template>
+        </el-table-column>
+        <el-table-column prop="employer.nickname" label="雇主" width="120" />
+        <el-table-column prop="status" label="状态" width="120">
+          <template #default="scope">
+            <el-tag :type="getOrderStatusType(scope.row.status)" size="small">
+              {{ formatOrderStatus(scope.row.status) }}
             </el-tag>
-          </div>
-          <el-empty description="您还没有添加任何技能。" v-else-if="!loadingSkills" />
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="180">
+          <template #default="scope">
+            <el-button size="small" @click="viewOrderDetail(scope.row.id)">查看详情</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
+    
+    <!-- 推荐的工作 -->
+    <el-card shadow="hover" class="table-card">
+      <template #header>
+        <div class="card-header">
+          <span>为您推荐的工作</span>
+          <el-button type="primary" text @click="navigateTo('jobs')">浏览更多</el-button>
         </div>
-
-        <el-descriptions title="工作偏好" :column="1" border class="profile-section">
-          <el-descriptions-item label="期望时薪 (元)">{{ freelancerProfile.hourly_rate || '未设置' }}</el-descriptions-item>
-          <el-descriptions-item label="可用状态">{{ formatAvailability(freelancerProfile.availability) }}</el-descriptions-item>
-          <el-descriptions-item label="工作偏好详情">
-            <pre class="work-preference-json">{{ freelancerProfile.work_preferences ? JSON.stringify(freelancerProfile.work_preferences, null, 2) : '未设置' }}</pre>
-          </el-descriptions-item>
-        </el-descriptions>
-
-        <el-descriptions title="作品集与链接" :column="1" border class="profile-section">
-          <el-descriptions-item label="个人网站">{{ freelancerProfile.personal_website_url || '未提供' }}</el-descriptions-item>
-          <el-descriptions-item label="LinkedIn">{{ freelancerProfile.linkedin_url || '未提供' }}</el-descriptions-item>
-          <el-descriptions-item label="GitHub">{{ freelancerProfile.github_url || '未提供' }}</el-descriptions-item>
-          <el-descriptions-item label="Dribbble">{{ freelancerProfile.dribbble_url || '未提供' }}</el-descriptions-item>
-          <el-descriptions-item label="Behance">{{ freelancerProfile.behance_url || '未提供' }}</el-descriptions-item>
-          <el-descriptions-item label="作品集链接">
-            <div v-if="freelancerProfile.portfolio_links && freelancerProfile.portfolio_links.length">
-              <ul>
-                <li v-for="(link, index) in freelancerProfile.portfolio_links" :key="index">
-                  <a :href="link" target="_blank" rel="noopener noreferrer">{{ link }}</a>
-                </li>
-              </ul>
+      </template>
+      <div v-if="loading.recommendedJobs" class="loading-container">
+        <el-skeleton :rows="3" animated />
+      </div>
+      <div v-else-if="recommendedJobs.length === 0" class="empty-container">
+        <el-empty description="暂无推荐工作" />
+      </div>
+      <el-row v-else :gutter="20" class="job-cards">
+        <el-col v-for="job in recommendedJobs" :key="job.id" :xs="24" :sm="12" :md="8">
+          <el-card shadow="hover" class="job-card" @click="viewJobDetail(job.id)">
+            <h3 class="job-title">{{ job.title }}</h3>
+            <div class="job-tags">
+              <el-tag v-if="job.is_urgent" type="danger" size="small" effect="plain">急聘</el-tag>
+              <el-tag size="small" effect="plain">{{ job.job_category }}</el-tag>
             </div>
-            <span v-else>未提供</span>
-          </el-descriptions-item>
-        </el-descriptions>
-      </div>
+            <div class="job-info">
+              <p><el-icon><Money /></el-icon> {{ formatPayInfo(job) }}</p>
+              <p><el-icon><Location /></el-icon> {{ job.location_city || job.location_address }}</p>
+            </div>
+            <div class="job-footer">
+              <span class="job-date">{{ formatTimeAgo(job.created_at) }}</span>
+              <el-button size="small" type="primary" plain @click.stop="viewJobDetail(job.id)">查看详情</el-button>
+            </div>
+          </el-card>
+        </el-col>
+      </el-row>
     </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, reactive, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import axios from 'axios';
-import { ElMessage } from 'element-plus';
 import { useAuthStore } from '@/stores/auth';
-import apiConfig from '@/utils/apiConfig';
+import apiClient from '@/utils/apiClient';
+import { 
+  Document, ShoppingCart, CircleCheck, Money, EditPen, 
+  Star, Lock, Warning, Loading, Location 
+} from '@element-plus/icons-vue';
 
+// 路由和状态管理
 const router = useRouter();
 const authStore = useAuthStore();
 
-const freelancerProfile = ref<any>(null);
-const freelancerSkills = ref<any[]>([]);
-const loadingProfile = ref(true);
-const loadingSkills = ref(true);
-const profileExists = ref(false);
+// 加载状态
+const loading = reactive({
+  dashboard: false,
+  applications: false,
+  orders: false,
+  recommendedJobs: false
+});
 
-// 获取零工档案数据
-const fetchFreelancerProfile = async () => {
-  loadingProfile.value = true;
+// 数据
+const dashboardData = ref<any>({});
+const recentApplications = ref<any[]>([]);
+const activeOrders = ref<any[]>([]);
+const recommendedJobs = ref<any[]>([]);
+
+// 计算属性
+const profileComplete = computed(() => {
+  return dashboardData.value.profile_complete === true;
+});
+
+const isVerified = computed(() => {
+  return dashboardData.value.verification_status === 'approved';
+});
+
+const verificationPending = computed(() => {
+  return dashboardData.value.verification_status === 'pending';
+});
+
+// 获取仪表盘数据
+const fetchDashboardData = async () => {
+  loading.dashboard = true;
   try {
-    const token = authStore.token;
-    if (!token) {
-      ElMessage.error('您尚未登录或登录已过期');
-      router.push('/login');
-      return;
-    }
-
-    // 使用axios直接请求API
-    const response = await axios.get(apiConfig.getApiUrl('profiles/freelancer/me'), {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-
-    // 处理响应数据
-    if (response.data && response.data.code === 0 && response.data.data) {
-      freelancerProfile.value = response.data.data;
-      profileExists.value = true;
-    } else {
-      profileExists.value = false;
-      freelancerProfile.value = null;
-    }
-  } catch (error: any) {
-    console.error('获取零工档案失败:', error);
-    
-    // 处理404错误（未创建档案）
-    if (error.response && error.response.status === 404) {
-      profileExists.value = false;
-      freelancerProfile.value = null;
-    } else {
-      ElMessage.error(error.response?.data?.message || '获取零工档案失败，请稍后再试。');
-    }
+    const response = await apiClient.get('profiles/freelancer/dashboard');
+    dashboardData.value = response.data;
+  } catch (error) {
+    console.error('获取仪表盘数据失败:', error);
   } finally {
-    loadingProfile.value = false;
+    loading.dashboard = false;
   }
 };
 
-// 获取零工技能数据
-const fetchFreelancerSkills = async () => {
-  loadingSkills.value = true;
+// 获取最近的申请
+const fetchRecentApplications = async () => {
+  loading.applications = true;
   try {
-    const token = authStore.token;
-    if (!token) {
-      return;
-    }
-
-    // 使用axios直接请求API
-    const response = await axios.get('http://127.0.0.1:5000/api/v1/profiles/freelancer/me/skills', {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
+    const response = await apiClient.get('job-applications/my', {
+      params: { page: 1, per_page: 5 }
     });
-
-    // 处理响应数据
-    if (response.data && response.data.code === 0) {
-      if (Array.isArray(response.data.data)) {
-        freelancerSkills.value = response.data.data;
-      } else if (response.data.data && Array.isArray(response.data.data.skills)) {
-        freelancerSkills.value = response.data.data.skills;
-      } else {
-        freelancerSkills.value = [];
-      }
-    } else {
-      freelancerSkills.value = [];
-    }
-  } catch (error: any) {
-    console.error('获取零工技能失败:', error);
-    
-    // 只在档案存在但获取技能失败时显示错误
-    if (profileExists.value) {
-      ElMessage.error('获取技能列表失败。');
-    }
-    
-    freelancerSkills.value = [];
+    recentApplications.value = response.data.items;
+  } catch (error) {
+    console.error('获取最近申请失败:', error);
   } finally {
-    loadingSkills.value = false;
+    loading.applications = false;
   }
 };
 
-// 页面跳转函数
-const goToEditProfile = () => {
-  router.push('/freelancer/edit-profile');
+// 获取进行中的订单
+const fetchActiveOrders = async () => {
+  loading.orders = true;
+  try {
+    const response = await apiClient.get('orders', {
+      params: { 
+        page: 1, 
+        per_page: 5,
+        status: 'active',
+        role: 'freelancer'
+      }
+    });
+    activeOrders.value = response.data.items;
+  } catch (error) {
+    console.error('获取进行中订单失败:', error);
+  } finally {
+    loading.orders = false;
+  }
 };
 
-const goToManageSkills = () => {
-  router.push('/freelancer/manage-skills');
+// 获取推荐工作
+const fetchRecommendedJobs = async () => {
+  loading.recommendedJobs = true;
+  try {
+    const response = await apiClient.get('jobs/recommendations', {
+      params: { count: 6 }
+    });
+    recommendedJobs.value = response.data.items;
+  } catch (error) {
+    console.error('获取推荐工作失败:', error);
+  } finally {
+    loading.recommendedJobs = false;
+  }
 };
 
-const goToVerificationPage = () => {
-  router.push('/verifications/submit');
+// 导航到不同页面
+const navigateTo = (route: string) => {
+  switch (route) {
+    case 'freelancer-profile':
+      router.push('/freelancer/profile');
+      break;
+    case 'manage-skills':
+      router.push('/freelancer/skills');
+      break;
+    case 'verification':
+      router.push('/verifications/records');
+      break;
+    case 'my-applications':
+      router.push('/freelancer/applications');
+      break;
+    case 'my-orders':
+      router.push('/orders');
+      break;
+    case 'jobs':
+      router.push('/jobs');
+      break;
+    default:
+      router.push('/');
+  }
 };
 
-// 格式化函数
-const formatGender = (gender: string | null) => {
-  if (!gender) return '未设置';
-  const genderMap: { [key: string]: string } = {
-    male: '男',
-    female: '女',
-    other: '其他',
-  };
-  return genderMap[gender.toLowerCase()] || '未知';
+// 查看工作详情
+const viewJobDetail = (jobId: number) => {
+  router.push(`/jobs/${jobId}`);
 };
 
-const formatAvailability = (availability: string | null) => {
-  if (!availability) return '未设置';
-  const availabilityMap: { [key: string]: string } = {
-    available: '可接受新工作',
-    busy: '忙碌中',
-    unavailable: '暂不接受新工作',
-  };
-  return availabilityMap[availability.toLowerCase()] || '未知';
+// 查看订单详情
+const viewOrderDetail = (orderId: number) => {
+  router.push(`/orders/${orderId}`);
 };
 
-const formatVerificationStatus = (status: string | null | undefined) => {
-  if (!status) return '未验证';
-  const statusMap: { [key: string]: string } = {
-    not_verified: '未验证',
-    pending: '审核中',
-    verified: '已认证',
-    failed: '认证失败',
+// 格式化状态显示
+const formatStatus = (status: string): string => {
+  const statusMap: Record<string, string> = {
+    'pending': '待处理',
+    'accepted': '已接受',
+    'rejected': '已拒绝',
+    'cancelled': '已取消'
   };
   return statusMap[status] || status;
 };
 
-const getVerificationStatusType = (status: string | null | undefined) => {
-  if (!status) return 'info';
-  const statusTypeMap: { [key: string]: '' | 'success' | 'warning' | 'danger' | 'info' } = {
-    not_verified: 'info',
-    pending: 'warning',
-    verified: 'success',
-    failed: 'danger',
+// 获取状态类型
+const getStatusType = (status: string): string => {
+  const typeMap: Record<string, string> = {
+    'pending': 'warning',
+    'accepted': 'success',
+    'rejected': 'danger',
+    'cancelled': 'info'
   };
-  return statusTypeMap[status] || 'info';
+  return typeMap[status] || 'info';
 };
 
-// 组件挂载时执行
+// 格式化订单状态
+const formatOrderStatus = (status: string): string => {
+  const statusMap: Record<string, string> = {
+    'created': '已创建',
+    'in_progress': '进行中',
+    'completed': '已完成',
+    'confirmed': '已确认',
+    'cancelled': '已取消',
+    'disputed': '有争议'
+  };
+  return statusMap[status] || status;
+};
+
+// 获取订单状态类型
+const getOrderStatusType = (status: string): string => {
+  const typeMap: Record<string, string> = {
+    'created': 'info',
+    'in_progress': 'warning',
+    'completed': 'success',
+    'confirmed': 'success',
+    'cancelled': 'danger',
+    'disputed': 'danger'
+  };
+  return typeMap[status] || 'info';
+};
+
+// 格式化日期
+const formatDate = (dateString: string): string => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+
+// 格式化相对时间
+const formatTimeAgo = (dateString: string): string => {
+  if (!dateString) return '';
+  
+  const now = new Date();
+  const date = new Date(dateString);
+  const diffMs = now.getTime() - date.getTime();
+  const diffSec = Math.round(diffMs / 1000);
+  const diffMin = Math.round(diffSec / 60);
+  const diffHour = Math.round(diffMin / 60);
+  const diffDay = Math.round(diffHour / 24);
+  
+  if (diffSec < 60) return `${diffSec}秒前`;
+  if (diffMin < 60) return `${diffMin}分钟前`;
+  if (diffHour < 24) return `${diffHour}小时前`;
+  if (diffDay < 30) return `${diffDay}天前`;
+  
+  return formatDate(dateString);
+};
+
+// 格式化薪资信息
+const formatPayInfo = (job: any): string => {
+  const amount = job.salary_amount || 0;
+  const type = job.salary_type || 'fixed';
+  
+  let typeText = '';
+  switch (type) {
+    case 'hourly': typeText = '元/小时'; break;
+    case 'daily': typeText = '元/天'; break;
+    case 'weekly': typeText = '元/周'; break;
+    case 'monthly': typeText = '元/月'; break;
+    case 'negotiable': return '薪资面议';
+    default: typeText = '元'; // fixed
+  }
+  
+  return `${amount}${typeText}`;
+};
+
+// 格式化货币
+const formatCurrency = (amount: number): string => {
+  return `¥${amount.toFixed(2)}`;
+};
+
+// 初始化页面数据
 onMounted(() => {
-  if (authStore.isLoggedIn) {
-    fetchFreelancerProfile().then(() => {
-      if (profileExists.value) {
-        fetchFreelancerSkills();
-      } else {
-        loadingSkills.value = false;
-      }
-    });
-  } else {
-    ElMessage.warning('请先登录。');
-    router.push('/login');
-    loadingProfile.value = false;
-    loadingSkills.value = false;
+  if (authStore.isLoggedIn && authStore.user?.current_role === 'freelancer') {
+    fetchDashboardData();
+    fetchRecentApplications();
+    fetchActiveOrders();
+    fetchRecommendedJobs();
   }
 });
 </script>
 
 <style scoped>
 .page-container {
-  padding: 20px;
-  max-width: 1000px;
+  max-width: 1200px;
   margin: 20px auto;
+  padding: 0 20px;
+}
+
+.page-title {
+  font-size: 24px;
+  font-weight: bold;
+  margin-bottom: 24px;
+  color: #303133;
+}
+
+.stats-row, .action-row {
+  margin-bottom: 24px;
+}
+
+.stats-card {
+  height: 120px;
+  display: flex;
+  position: relative;
+  overflow: hidden;
+}
+
+.stats-content {
+  z-index: 1;
+}
+
+.stats-value {
+  font-size: 28px;
+  font-weight: bold;
+  color: #303133;
+  margin-bottom: 8px;
+}
+
+.stats-label {
+  font-size: 14px;
+  color: #909399;
+}
+
+.stats-icon {
+  position: absolute;
+  bottom: -10px;
+  right: 10px;
+  opacity: 0.1;
+  transform: scale(1.5);
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 1.2em;
-  font-weight: bold;
 }
 
-.action-buttons {
+.action-card {
+  height: 150px;
+  margin-bottom: 16px;
+}
+
+.card-content {
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 10px;
+  height: 100%;
 }
 
-.loading-state,
-.profile-details {
+.status-complete {
+  color: #67C23A;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.status-incomplete {
+  color: #F56C6C;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.status-pending {
+  color: #E6A23C;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.highlight {
+  font-weight: bold;
+  color: #409EFF;
+}
+
+.table-card {
+  margin-bottom: 24px;
+}
+
+.loading-container, .empty-container {
   padding: 20px;
+  display: flex;
+  justify-content: center;
 }
 
-.profile-section {
-  margin-top: 20px;
-  margin-bottom: 30px; /* Added margin for better separation */
+.job-cards {
+  margin-top: 16px;
 }
 
-.profile-section h4 {
-  margin-bottom: 15px;
-  font-size: 1.1em;
+.job-card {
+  cursor: pointer;
+  height: 100%;
+  transition: transform 0.2s;
+}
+
+.job-card:hover {
+  transform: translateY(-5px);
+}
+
+.job-title {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 16px;
+  font-weight: bold;
   color: #303133;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
+.job-tags {
+  margin-bottom: 10px;
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
 }
 
-.bio-text {
-  line-height: 1.6;
+.job-info {
+  margin-bottom: 10px;
+}
+
+.job-info p {
+  margin: 5px 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
   color: #606266;
-  white-space: pre-wrap; /* 保留换行和空格 */
-  background-color: #f9f9f9; /* Slight background for bio */
-  padding: 10px;
-  border-radius: 4px;
 }
 
-.skill-tag {
-  margin-right: 8px;
-  margin-bottom: 8px;
+.job-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
 }
 
-.work-preference-json {
-  background-color: #f5f7fa;
-  padding: 10px;
-  border-radius: 4px;
-  font-family: 'Courier New', Courier, monospace;
-  white-space: pre-wrap;
+.job-date {
+  font-size: 12px;
+  color: #909399;
 }
 
-.status-verified { color: #67C23A; font-weight: bold; }
-.status-pending { color: #E6A23C; font-weight: bold; }
-.status-failed { color: #F56C6C; font-weight: bold; }
-.status-not_verified, .status-null { color: #909399; }
-
-.el-empty {
-  padding: 20px 0; /* Reduced padding for empty states within sections */
-}
-
-.el-avatar {
-  border: 1px solid #eee;
-}
-
-/* Ensure el-descriptions content is well-aligned and readable */
-.el-descriptions {
-    margin-top: 20px;
-}
-.el-descriptions-item__label {
-    font-weight: bold;
+@media (max-width: 768px) {
+  .stats-row {
+    margin-bottom: 0;
+  }
+  
+  .stats-card, .action-card {
+    margin-bottom: 16px;
+  }
 }
 </style>

@@ -1,190 +1,223 @@
+<!--
+  @file JobApplicantsView.vue
+  @description 雇主查看工作申请者及管理申请状态
+  @author Fy
+  @date 2023-05-22
+-->
 <template>
   <div class="job-applicants page-container">
     <el-card shadow="never">
       <template #header>
         <div class="card-header">
-          <span>工作申请管理</span>
-          <div class="header-actions">
-            <el-select v-model="statusFilter" placeholder="筛选状态" clearable @change="filterApplications">
-              <el-option label="全部" value="" />
+          <div class="title-section">
+            <h1>申请者管理</h1>
+            <h2 v-if="job" class="job-title">{{ job.title }}</h2>
+          </div>
+          <el-button @click="goBack">返回</el-button>
+        </div>
+      </template>
+      
+      <!-- 加载状态 -->
+      <div v-if="loading.job || loading.applicants" class="loading-state">
+        <el-skeleton :rows="10" animated />
+      </div>
+      
+      <!-- 无申请者状态 -->
+      <el-empty
+        v-else-if="applicants.length === 0"
+        description="暂无申请者"
+      >
+        <div class="actions">
+          <el-button @click="goBack">返回工作列表</el-button>
+        </div>
+      </el-empty>
+      
+      <!-- 申请者列表 -->
+      <template v-else>
+        <!-- 筛选条件 -->
+        <el-form :inline="true" class="filter-form">
+          <el-form-item label="状态">
+            <el-select v-model="filterParams.status" placeholder="所有状态" clearable @change="fetchApplicants">
               <el-option label="待处理" value="pending" />
               <el-option label="已接受" value="accepted" />
               <el-option label="已拒绝" value="rejected" />
-              <el-option label="已取消" value="canceled" />
+              <el-option label="已取消" value="cancelled" />
             </el-select>
-          </div>
-        </div>
-      </template>
-
-      <div v-if="!jobId">
-        <el-empty description="请选择一个工作查看申请"></el-empty>
-      </div>
-
-      <div v-else-if="loading" class="loading-container">
-        <el-skeleton :rows="5" animated />
-      </div>
-      
-      <div v-else-if="applications.length === 0" class="empty-container">
-        <el-empty description="暂无申请记录" />
-      </div>
-
-      <div v-else class="applicants-list">
-        <el-table 
-          :data="applications" 
-          style="width: 100%"
-          :default-sort="{ prop: 'created_at', order: 'descending' }"
-          row-key="id"
-          @row-click="viewApplicationDetails"
-        >
-          <el-table-column
-            prop="freelancer_info.nickname"
-            label="申请人" 
-            min-width="120"
-          >
-            <template #default="scope">
-              <div class="applicant-info">
-                <el-avatar :size="32" :src="scope.row.freelancer_info?.avatar_url || defaultAvatar"></el-avatar>
-                <span>{{ scope.row.freelancer_info?.nickname || '无名用户' }}</span>
-              </div>
-            </template>
-          </el-table-column>
-
-          <el-table-column prop="application_message" label="申请留言" min-width="180" show-overflow-tooltip />
-
-          <el-table-column prop="status" label="状态" width="120">
-            <template #default="scope">
-              <el-tag 
-                :type="getApplicationStatusType(scope.row.status)" 
-                size="small"
-                effect="light"
-              >
-                {{ formatApplicationStatus(scope.row.status) }}
-              </el-tag>
-            </template>
-          </el-table-column>
-
-          <el-table-column prop="created_at" label="申请时间" width="160" sortable>
-            <template #default="scope">
-              {{ formatDate(scope.row.created_at) }}
-            </template>
-          </el-table-column>
-
-          <el-table-column label="操作" width="160" fixed="right">
-            <template #default="scope">
-              <div v-if="scope.row.status === 'pending'">
+          </el-form-item>
+          
+          <el-form-item label="排序">
+            <el-select v-model="filterParams.sort_by" placeholder="申请时间" @change="fetchApplicants">
+              <el-option label="最新申请" value="created_at_desc" />
+              <el-option label="最早申请" value="created_at_asc" />
+              <el-option label="匹配度高到低" value="score_desc" />
+            </el-select>
+          </el-form-item>
+        </el-form>
+        
+        <div class="applicants-list">
+          <el-table :data="applicants" style="width: 100%" border>
+            <el-table-column label="申请者" min-width="180">
+              <template #default="{ row }">
+                <div class="applicant-info">
+                  <el-avatar :src="row.freelancer.avatar_url || ''" :size="40">
+                    {{ row.freelancer.nickname ? row.freelancer.nickname.substring(0, 1).toUpperCase() : 'U' }}
+                  </el-avatar>
+                  <div class="applicant-details">
+                    <div class="applicant-name">{{ row.freelancer.nickname || `用户 #${row.freelancer_user_id}` }}</div>
+                    <div class="application-date">申请于 {{ formatDateTime(row.created_at) }}</div>
+                  </div>
+                </div>
+              </template>
+            </el-table-column>
+            
+            <el-table-column label="期望薪资" min-width="100" align="center">
+              <template #default="{ row }">
+                <div v-if="row.expected_salary">{{ row.expected_salary }}元/{{ getSalaryTypeText(job.salary_type) }}</div>
+                <div v-else>接受发布薪资</div>
+              </template>
+            </el-table-column>
+            
+            <el-table-column label="状态" min-width="100" align="center">
+              <template #default="{ row }">
+                <el-tag :type="getStatusType(row.status)">{{ getStatusText(row.status) }}</el-tag>
+              </template>
+            </el-table-column>
+            
+            <el-table-column label="操作" min-width="250" fixed="right">
+              <template #default="{ row }">
                 <el-button 
-                  type="success" 
                   size="small" 
-                  @click.stop="acceptApplication(scope.row)"
+                  @click="viewProfile(row.freelancer_user_id)"
+                >
+                  查看档案
+                </el-button>
+                
+                <el-button
+                  v-if="row.status === 'pending'"
+                  type="success"
+                  size="small"
+                  @click="acceptApplicant(row)"
                 >
                   接受
                 </el-button>
-                <el-button 
-                  type="danger" 
-                  size="small" 
-                  @click.stop="openRejectDialog(scope.row)"
+                
+                <el-button
+                  v-if="row.status === 'pending'"
+                  type="danger"
+                  size="small"
+                  @click="rejectApplicant(row)"
                 >
                   拒绝
                 </el-button>
-              </div>
-              <el-button 
-                v-else
-                type="primary" 
-                size="small" 
-                @click.stop="viewApplicationDetails(scope.row)"
-              >
-                查看详情
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-
-        <!-- 分页 -->
-        <div class="pagination-container">
-          <el-pagination
-            v-model:currentPage="currentPage"
-            :page-size="pageSize"
-            :total="totalItems"
-            layout="total, prev, pager, next"
-            @current-change="handlePageChange"
-          />
-        </div>
-      </div>
-    </el-card>
-
-    <!-- 查看详情对话框 -->
-    <el-dialog
-      v-model="detailDialogVisible"
-      title="申请详情"
-      width="500px"
-    >
-      <div v-if="selectedApplication" class="application-detail">
-        <el-descriptions :column="1" border>
-          <el-descriptions-item label="申请人">
-            <div class="applicant-info">
-              <el-avatar :size="40" :src="selectedApplication.freelancer_info?.avatar_url || defaultAvatar"></el-avatar>
-              <span>{{ selectedApplication.freelancer_info?.nickname || '无名用户' }}</span>
-            </div>
-          </el-descriptions-item>
-          <el-descriptions-item label="申请状态">
-            <el-tag :type="getApplicationStatusType(selectedApplication.status)" effect="light">
-              {{ formatApplicationStatus(selectedApplication.status) }}
-            </el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="申请时间">
-            {{ formatDate(selectedApplication.created_at) }}
-          </el-descriptions-item>
-          <el-descriptions-item label="处理时间" v-if="selectedApplication.processed_at">
-            {{ formatDate(selectedApplication.processed_at) }}
-          </el-descriptions-item>
-          <el-descriptions-item label="申请留言" v-if="selectedApplication.application_message">
-            {{ selectedApplication.application_message }}
-          </el-descriptions-item>
-          <el-descriptions-item label="拒绝原因" v-if="selectedApplication.status === 'rejected' && selectedApplication.rejection_reason">
-            {{ selectedApplication.rejection_reason }}
-          </el-descriptions-item>
-        </el-descriptions>
-        
-        <div class="dialog-footer">
-          <el-button @click="detailDialogVisible = false">关闭</el-button>
-          <div v-if="selectedApplication.status === 'pending'">
-            <el-button 
-              type="success" 
-              @click="acceptApplication(selectedApplication)"
-            >
-              接受
-            </el-button>
-            <el-button 
-              type="danger" 
-              @click="openRejectDialog(selectedApplication)"
-            >
-              拒绝
-            </el-button>
+                
+                <el-button
+                  v-if="row.status === 'accepted' && job.status === 'active'"
+                  type="primary"
+                  size="small"
+                  @click="createOrder(row)"
+                >
+                  创建订单
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          
+          <!-- 分页 -->
+          <div class="pagination-container">
+            <el-pagination
+              v-model:currentPage="pagination.page"
+              v-model:page-size="pagination.per_page"
+              :page-sizes="[10, 20, 50]"
+              layout="total, sizes, prev, pager, next, jumper"
+              :total="pagination.total"
+              @size-change="handleSizeChange"
+              @current-change="handleCurrentChange"
+            />
           </div>
         </div>
-      </div>
-    </el-dialog>
-
-    <!-- 拒绝申请对话框 -->
+      </template>
+    </el-card>
+    
+    <!-- 接受/拒绝申请者对话框 -->
     <el-dialog
-      v-model="rejectDialogVisible"
-      title="拒绝申请"
-      width="400px"
+      v-model="dialogVisible"
+      :title="dialogTitle"
+      width="30%"
     >
-      <el-form :model="rejectForm" label-position="top">
-        <el-form-item label="拒绝原因（可选）">
-          <el-input 
-            v-model="rejectForm.reason" 
-            type="textarea" 
-            rows="3"
-            placeholder="请输入拒绝原因（可选）"
+      <el-form :model="responseForm" label-position="top">
+        <el-form-item label="留言给申请者(可选)">
+          <el-input
+            v-model="responseForm.message"
+            type="textarea"
+            :rows="4"
+            placeholder="可以输入留言给申请者..."
           />
         </el-form-item>
       </el-form>
       <template #footer>
         <span class="dialog-footer">
-          <el-button @click="rejectDialogVisible = false">取消</el-button>
-          <el-button type="primary" :loading="processing" @click="rejectApplication">确认</el-button>
+          <el-button @click="dialogVisible = false">取消</el-button>
+          <el-button 
+            :type="currentAction === 'accept' ? 'success' : 'danger'"
+            @click="confirmResponse"
+            :loading="responseLoading"
+          >
+            确认{{ currentAction === 'accept' ? '接受' : '拒绝' }}
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
+    
+    <!-- 创建订单对话框 -->
+    <el-dialog
+      v-model="orderDialogVisible"
+      title="创建订单"
+      width="50%"
+    >
+      <el-form :model="orderForm" :rules="orderRules" ref="orderFormRef" label-width="100px">
+        <el-form-item label="订单标题" prop="title">
+          <el-input v-model="orderForm.title" placeholder="请输入订单标题" />
+        </el-form-item>
+        
+        <el-form-item label="订单金额" prop="amount">
+          <el-input-number v-model="orderForm.amount" :min="1" :precision="2" :step="100" style="width: 100%" />
+        </el-form-item>
+        
+        <el-form-item label="开始日期" prop="start_time">
+          <el-date-picker
+            v-model="orderForm.start_time"
+            type="datetime"
+            placeholder="选择开始时间"
+            format="YYYY-MM-DD HH:mm"
+            value-format="YYYY-MM-DD HH:mm:ss"
+            style="width: 100%"
+          />
+        </el-form-item>
+        
+        <el-form-item label="结束日期" prop="end_time">
+          <el-date-picker
+            v-model="orderForm.end_time"
+            type="datetime"
+            placeholder="选择结束时间"
+            format="YYYY-MM-DD HH:mm"
+            value-format="YYYY-MM-DD HH:mm:ss"
+            style="width: 100%"
+          />
+        </el-form-item>
+        
+        <el-form-item label="订单说明" prop="description">
+          <el-input
+            v-model="orderForm.description"
+            type="textarea"
+            :rows="4"
+            placeholder="请输入订单详细说明..."
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="orderDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitOrderForm" :loading="orderLoading">创建订单</el-button>
         </span>
       </template>
     </el-dialog>
@@ -192,302 +225,365 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive, computed } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import axios from 'axios';
-import { ElMessage, ElMessageBox } from 'element-plus';
+import { ref, reactive, onMounted, computed } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
+import { ElMessage, FormInstance } from 'element-plus';
 import { useAuthStore } from '@/stores/auth';
-import apiConfig from '@/utils/apiConfig';
+import apiClient from '@/utils/apiClient';
 import dayjs from 'dayjs';
 
-const route = useRoute();
+// 路由与状态管理
 const router = useRouter();
+const route = useRoute();
 const authStore = useAuthStore();
+const orderFormRef = ref<FormInstance>();
 
-// 默认头像
-const defaultAvatar = 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png';
-
-// 状态数据
-const applications = ref<any[]>([]);
-const loading = ref(true);
-const currentPage = ref(1);
-const pageSize = ref(10);
-const totalItems = ref(0);
-const statusFilter = ref('');
-const processing = ref(false);
-
-// 详情对话框状态
-const detailDialogVisible = ref(false);
-const selectedApplication = ref<any>(null);
-
-// 拒绝对话框状态
-const rejectDialogVisible = ref(false);
-const rejectForm = reactive({
-  reason: ''
-});
-
-// 从路由参数获取工作ID
+// 获取路由参数
 const jobId = computed(() => {
-  return Number(route.params.jobId) || 0;
+  return route.params.id ? parseInt(route.params.id as string) : null;
 });
 
-// 获取申请列表
-const fetchApplications = async () => {
+// 加载状态
+const loading = reactive({
+  job: true,
+  applicants: true
+});
+
+// 工作信息
+const job = ref(null);
+
+// 申请者列表
+const applicants = ref([]);
+const pagination = reactive({
+  page: 1,
+  per_page: 10,
+  total: 0
+});
+
+// 筛选参数
+const filterParams = reactive({
+  status: '',
+  sort_by: 'created_at_desc'
+});
+
+// 对话框控制
+const dialogVisible = ref(false);
+const dialogTitle = ref('');
+const currentAction = ref('');
+const selectedApplicant = ref(null);
+const responseLoading = ref(false);
+const responseForm = reactive({
+  message: ''
+});
+
+// 订单对话框控制
+const orderDialogVisible = ref(false);
+const orderLoading = ref(false);
+const orderForm = reactive({
+  title: '',
+  amount: 0,
+  start_time: '',
+  end_time: '',
+  description: '',
+  job_application_id: null
+});
+
+// 订单表单验证规则
+const orderRules = {
+  title: [
+    { required: true, message: '请输入订单标题', trigger: 'blur' },
+    { min: 5, max: 100, message: '标题长度应在5到100个字符之间', trigger: 'blur' }
+  ],
+  amount: [
+    { required: true, message: '请输入订单金额', trigger: 'blur' },
+    { type: 'number', min: 1, message: '金额必须大于0', trigger: 'blur' }
+  ],
+  start_time: [
+    { required: true, message: '请选择开始时间', trigger: 'change' }
+  ],
+  end_time: [
+    { required: true, message: '请选择结束时间', trigger: 'change' }
+  ],
+  description: [
+    { required: true, message: '请输入订单说明', trigger: 'blur' },
+    { min: 10, max: 500, message: '说明长度应在10到500个字符之间', trigger: 'blur' }
+  ]
+};
+
+// 获取工作详情
+const fetchJobDetails = async () => {
   if (!jobId.value) return;
   
-  loading.value = true;
+  loading.job = true;
   try {
-    // 获取token
-    const token = authStore.token;
-    if (!token) {
-      ElMessage.error('您需要先登录');
-      router.push('/auth/login');
-      return;
-    }
-    
-    // 构造API请求参数
-    const params: Record<string, any> = {
-      page: currentPage.value,
-      per_page: pageSize.value
+    const response = await apiClient.get(`jobs/${jobId.value}`);
+    job.value = response.data;
+  } catch (error) {
+    console.error('获取工作详情失败:', error);
+    ElMessage.error('无法获取工作详情');
+  } finally {
+    loading.job = false;
+  }
+};
+
+// 获取申请者列表
+const fetchApplicants = async () => {
+  if (!jobId.value) return;
+  
+  loading.applicants = true;
+  try {
+    const params = {
+      page: pagination.page,
+      per_page: pagination.per_page,
+      ...filterParams
     };
     
-    if (statusFilter.value) {
-      params.status = statusFilter.value;
-    }
+    const response = await apiClient.get(`jobs/${jobId.value}/applications`, { params });
     
-    // 发起请求
-    const response = await axios.get(
-      apiConfig.getApiUrl(`/job-applications/jobs/${jobId.value}/list`), 
-      {
-        headers: {
-          Authorization: `Bearer ${token}`
-        },
-        params
-      }
-    );
-    
-    // 处理响应
-    if (response.data && response.data.code === 0) {
-      applications.value = response.data.data.items;
-      totalItems.value = response.data.data.pagination.total_items;
-    } else {
-      ElMessage.error(response.data?.message || '获取申请列表失败');
-    }
-  } catch (error: any) {
-    console.error('获取申请列表错误:', error);
-    ElMessage.error(error.response?.data?.message || '获取申请列表时发生错误');
+    applicants.value = response.data.items;
+    pagination.total = response.data.pagination.total_items;
+  } catch (error) {
+    console.error('获取申请者列表失败:', error);
+    ElMessage.error('无法获取申请者列表');
   } finally {
-    loading.value = false;
+    loading.applicants = false;
   }
 };
 
-// 查看申请详情
-const viewApplicationDetails = (row: any) => {
-  selectedApplication.value = row;
-  detailDialogVisible.value = true;
+// 查看零工档案
+const viewProfile = (freelancerId) => {
+  router.push(`/freelancers/${freelancerId}`);
 };
 
-// 状态筛选
-const filterApplications = () => {
-  currentPage.value = 1; // 重置到第一页
-  fetchApplications();
+// 接受申请者
+const acceptApplicant = (applicant) => {
+  selectedApplicant.value = applicant;
+  currentAction.value = 'accept';
+  dialogTitle.value = '接受申请';
+  responseForm.message = '';
+  dialogVisible.value = true;
 };
 
-// 页码变更
-const handlePageChange = (page: number) => {
-  currentPage.value = page;
-  fetchApplications();
+// 拒绝申请者
+const rejectApplicant = (applicant) => {
+  selectedApplicant.value = applicant;
+  currentAction.value = 'reject';
+  dialogTitle.value = '拒绝申请';
+  responseForm.message = '';
+  dialogVisible.value = true;
 };
 
-// 打开拒绝申请对话框
-const openRejectDialog = (application: any) => {
-  selectedApplication.value = application;
-  rejectForm.reason = '';
-  rejectDialogVisible.value = true;
-};
-
-// 接受申请
-const acceptApplication = async (application: any) => {
-  if (!application) return;
+// 确认回复申请
+const confirmResponse = async () => {
+  if (!selectedApplicant.value) return;
   
+  responseLoading.value = true;
   try {
-    await ElMessageBox.confirm('确定接受该申请？接受后将创建订单', '确认', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
+    const endpoint = `job-applications/${selectedApplicant.value.id}/${currentAction.value === 'accept' ? 'accept' : 'reject'}`;
+    
+    await apiClient.post(endpoint, {
+      message: responseForm.message || undefined
     });
     
-    processing.value = true;
-    const token = authStore.token;
-    
-    const response = await axios.put(
-      apiConfig.getApiUrl(`/job-applications/${application.id}/process`),
-      { status: 'accepted' },
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    
-    if (response.data && response.data.code === 0) {
-      ElMessage.success('已接受申请');
-      detailDialogVisible.value = false;
-      fetchApplications(); // 重新加载申请列表
-      
-      // 如果创建了订单，可以提示订单ID
-      if (response.data.data.created_order_id) {
-        ElMessage({
-          message: `已创建订单 #${response.data.data.created_order_id}`,
-          type: 'success',
-          duration: 5000
-        });
+    ElMessage.success(`已${currentAction.value === 'accept' ? '接受' : '拒绝'}申请者`);
+    fetchApplicants(); // 刷新列表
+  } catch (error) {
+    console.error('处理申请失败:', error);
+  } finally {
+    responseLoading.value = false;
+    dialogVisible.value = false;
+  }
+};
+
+// 创建订单
+const createOrder = (applicant) => {
+  selectedApplicant.value = applicant;
+  
+  // 预填订单表单
+  orderForm.title = `${job.value.title} - 订单`;
+  orderForm.amount = applicant.expected_salary || job.value.salary_amount;
+  orderForm.start_time = job.value.start_time;
+  orderForm.end_time = job.value.end_time;
+  orderForm.description = job.value.description;
+  orderForm.job_application_id = applicant.id;
+  
+  orderDialogVisible.value = true;
+};
+
+// 提交订单表单
+const submitOrderForm = async () => {
+  if (!orderFormRef.value) return;
+  
+  await orderFormRef.value.validate(async (valid) => {
+    if (valid) {
+      orderLoading.value = true;
+      try {
+        await apiClient.post('orders', orderForm);
+        
+        ElMessage.success('订单创建成功');
+        orderDialogVisible.value = false;
+        fetchApplicants(); // 刷新申请者列表
+      } catch (error) {
+        console.error('创建订单失败:', error);
+      } finally {
+        orderLoading.value = false;
       }
     } else {
-      ElMessage.error(response.data?.message || '处理申请失败');
+      ElMessage.error('请完成必填项并修正表单错误');
     }
-  } catch (error: any) {
-    if (error !== 'cancel') {
-      console.error('接受申请错误:', error);
-      ElMessage.error(error.response?.data?.message || '接受申请时发生错误');
-    }
-  } finally {
-    processing.value = false;
-  }
+  });
 };
 
-// 拒绝申请
-const rejectApplication = async () => {
-  if (!selectedApplication.value) return;
-  
-  processing.value = true;
-  try {
-    const token = authStore.token;
-    
-    const response = await axios.put(
-      apiConfig.getApiUrl(`/job-applications/${selectedApplication.value.id}/process`),
-      { 
-        status: 'rejected',
-        reason: rejectForm.reason || undefined
-      },
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    
-    if (response.data && response.data.code === 0) {
-      ElMessage.success('已拒绝申请');
-      rejectDialogVisible.value = false;
-      detailDialogVisible.value = false;
-      fetchApplications(); // 重新加载申请列表
-    } else {
-      ElMessage.error(response.data?.message || '拒绝申请失败');
-    }
-  } catch (error: any) {
-    console.error('拒绝申请错误:', error);
-    ElMessage.error(error.response?.data?.message || '拒绝申请时发生错误');
-  } finally {
-    processing.value = false;
-  }
+// 分页处理
+const handleSizeChange = (val) => {
+  pagination.per_page = val;
+  fetchApplicants();
 };
 
-// 格式化申请状态
-const formatApplicationStatus = (status: string): string => {
-  const statusMap: Record<string, string> = {
-    'pending': '待处理',
-    'accepted': '已接受',
-    'rejected': '已拒绝',
-    'canceled': '已取消'
+const handleCurrentChange = (val) => {
+  pagination.page = val;
+  fetchApplicants();
+};
+
+// 返回上一页
+const goBack = () => {
+  router.back();
+};
+
+// 格式化日期时间
+const formatDateTime = (dateString) => {
+  if (!dateString) return '';
+  return dayjs(dateString).format('YYYY-MM-DD HH:mm');
+};
+
+// 获取状态显示文本
+const getStatusText = (status) => {
+  const statusMap = {
+    pending: '待处理',
+    accepted: '已接受',
+    rejected: '已拒绝',
+    cancelled: '已取消'
   };
   return statusMap[status] || status;
 };
 
-// 获取状态对应的样式类型
-const getApplicationStatusType = (status: string): '' | 'success' | 'warning' | 'danger' | 'info' => {
-  const typeMap: Record<string, '' | 'success' | 'warning' | 'danger' | 'info'> = {
-    'pending': '',
-    'accepted': 'success',
-    'rejected': 'danger',
-    'canceled': 'info'
+// 获取状态标签类型
+const getStatusType = (status) => {
+  const typeMap = {
+    pending: 'warning',
+    accepted: 'success',
+    rejected: 'danger',
+    cancelled: 'info'
   };
   return typeMap[status] || 'info';
 };
 
-// 格式化日期
-const formatDate = (dateString: string): string => {
-  if (!dateString) return '未设置';
-  return dayjs(dateString).format('YYYY-MM-DD HH:mm');
+// 获取薪资类型文本
+const getSalaryTypeText = (type) => {
+  const typeMap = {
+    fixed: '固定',
+    hourly: '小时',
+    daily: '天',
+    weekly: '周',
+    monthly: '月'
+  };
+  return typeMap[type] || type;
 };
 
-// 组件挂载时加载数据
+// 组件挂载
 onMounted(() => {
-  if (!authStore.isLoggedIn) {
-    ElMessage.warning('请先登录');
-    router.push('/auth/login');
+  // 检查用户角色是否为雇主
+  if (!authStore.isLoggedIn || authStore.user?.current_role !== 'employer') {
+    ElMessage.warning('请先以雇主身份登录');
+    router.push('/login');
     return;
   }
   
-  if (authStore.user?.current_role !== 'employer') {
-    ElMessage.warning('仅雇主可以查看申请管理');
-    router.push('/');
+  // 检查是否有工作ID
+  if (!jobId.value) {
+    ElMessage.error('无效的工作ID');
+    router.push('/employer/jobs');
     return;
   }
   
-  if (jobId.value) {
-    fetchApplications();
-  }
+  // 获取工作和申请者信息
+  fetchJobDetails();
+  fetchApplicants();
 });
 </script>
 
 <style scoped>
 .page-container {
-  padding: 20px;
-  max-width: 1000px;
+  max-width: 1200px;
   margin: 20px auto;
+  padding: 0 15px;
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 1.2em;
-  font-weight: bold;
 }
 
-.header-actions {
+.title-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.title-section h1 {
+  font-size: 1.5em;
+  font-weight: bold;
+  margin: 0;
+}
+
+.job-title {
+  font-size: 1.1em;
+  margin: 5px 0 0;
+  color: #606266;
+}
+
+.loading-state {
+  min-height: 300px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
 }
 
-.header-actions .el-select {
-  width: 150px;
-}
-
-.loading-container,
-.empty-container {
-  padding: 40px 0;
-  text-align: center;
+.filter-form {
+  margin-bottom: 20px;
 }
 
 .applicants-list {
-  margin-top: 10px;
+  margin-top: 20px;
 }
 
 .applicant-info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+}
+
+.applicant-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.applicant-name {
+  font-weight: bold;
+}
+
+.application-date {
+  font-size: 0.8em;
+  color: #909399;
+}
+
+.actions {
+  margin-top: 20px;
 }
 
 .pagination-container {
   margin-top: 20px;
   display: flex;
-  justify-content: center;
-}
-
-.application-detail {
-  padding: 10px;
-}
-
-.dialog-footer {
-  margin-top: 20px;
-  display: flex;
   justify-content: flex-end;
-  gap: 10px;
 }
 </style>

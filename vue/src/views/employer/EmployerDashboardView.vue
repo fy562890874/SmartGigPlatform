@@ -1,246 +1,497 @@
+<!--
+  @file EmployerDashboardView.vue
+  @description 雇主仪表盘，显示数据概览和快速操作
+  @author Fy
+  @date 2023-05-23
+-->
 <template>
   <div class="employer-dashboard page-container">
-    <el-card shadow="never">
-      <template #header>
-        <div class="card-header">
-          <span>我的雇主仪表盘</span>
-          <div class="action-buttons">
-            <el-button type="primary" :icon="EditPen" @click="goToEditProfile">编辑档案</el-button>
-            <el-button type="info" @click="router.push('/my-orders')">我的订单</el-button>
+    <h1 class="page-title">雇主工作台</h1>
+    
+    <!-- 数据概览卡片 -->
+    <el-row :gutter="20" class="stats-row">
+      <el-col :xs="24" :sm="12" :md="6">
+        <el-card shadow="hover" class="stats-card">
+          <div class="stats-content">
+            <div class="stats-value">{{ dashboardData.total_posted_jobs || 0 }}</div>
+            <div class="stats-label">已发布工作</div>
           </div>
-        </div>
-      </template>
-
-      <div v-if="loadingProfile" class="loading-state">
-        <el-skeleton :rows="12" animated />
-      </div>
-      <el-empty description="暂未创建雇主档案，请先创建。" v-else-if="!profileExistsAndLoaded">
-        <el-button type="success" @click="goToEditProfile">创建我的雇主档案</el-button>
-      </el-empty>
-      <div v-else-if="employerProfile" class="profile-details">
-        <el-descriptions :title="`档案类型: ${profileTypeDisplay(employerProfile.profile_type)}`" :column="2" border>
-          <el-descriptions-item label="用户ID">{{ employerProfile.user_id }}</el-descriptions-item>
-          <el-descriptions-item label="昵称/简称">{{ employerProfile.nickname || authStore.user?.nickname || '未填写' }}</el-descriptions-item>
-          
-          <el-descriptions-item label="真实姓名">{{ employerProfile.real_name || '未填写' }}</el-descriptions-item>
-          <el-descriptions-item label="联系电话">{{ employerProfile.contact_phone || '未填写' }}</el-descriptions-item>
-          
-          <el-descriptions-item label="所在地" :span="2">
-            {{ locationDisplay(employerProfile) }}
-          </el-descriptions-item>
-
-          <el-descriptions-item label="头像/Logo">
-            <el-avatar v-if="employerProfile.avatar_url" :src="employerProfile.avatar_url" :size="60" shape="square" />
-            <span v-else>未设置</span>
-          </el-descriptions-item>
-          <el-descriptions-item label="认证状态">
-            <el-tag :type="verificationStatusType(employerProfile.verification_status)">
-              {{ verificationStatusDisplay(employerProfile.verification_status) }}
-            </el-tag>
-             <el-button 
-                v-if="employerProfile.verification_status !== 'verified' && employerProfile.verification_status !== 'pending'"
-                type="warning" 
-                size="small"
-                style="margin-left: 10px;"
-                @click="goToVerificationPage"
-            >
-                {{ employerProfile.verification_status === 'failed' ? '重新提交认证' : '去认证' }}
+          <el-icon class="stats-icon" :size="40" color="#409EFF"><Briefcase /></el-icon>
+        </el-card>
+      </el-col>
+      <el-col :xs="24" :sm="12" :md="6">
+        <el-card shadow="hover" class="stats-card">
+          <div class="stats-content">
+            <div class="stats-value">{{ dashboardData.active_jobs || 0 }}</div>
+            <div class="stats-label">进行中工作</div>
+          </div>
+          <el-icon class="stats-icon" :size="40" color="#67C23A"><Clock /></el-icon>
+        </el-card>
+      </el-col>
+      <el-col :xs="24" :sm="12" :md="6">
+        <el-card shadow="hover" class="stats-card">
+          <div class="stats-content">
+            <div class="stats-value">{{ dashboardData.pending_applications || 0 }}</div>
+            <div class="stats-label">待处理申请</div>
+          </div>
+          <el-icon class="stats-icon" :size="40" color="#E6A23C"><DocumentChecked /></el-icon>
+        </el-card>
+      </el-col>
+      <el-col :xs="24" :sm="12" :md="6">
+        <el-card shadow="hover" class="stats-card">
+          <div class="stats-content">
+            <div class="stats-value">{{ dashboardData.active_orders || 0 }}</div>
+            <div class="stats-label">进行中订单</div>
+          </div>
+          <el-icon class="stats-icon" :size="40" color="#F56C6C"><ShoppingCart /></el-icon>
+        </el-card>
+      </el-col>
+    </el-row>
+    
+    <!-- 快速操作区 -->
+    <el-row :gutter="20" class="action-row">
+      <el-col :md="24">
+        <el-card shadow="never">
+          <template #header>
+            <div class="card-header">
+              <h2>快速操作</h2>
+            </div>
+          </template>
+          <div class="quick-actions">
+            <el-button type="primary" @click="navigateTo('/employer/jobs/post')">
+              <el-icon><Plus /></el-icon>发布新工作
             </el-button>
-          </el-descriptions-item>
-
-          <el-descriptions-item label="信用分">{{ employerProfile.credit_score ?? 'N/A' }}</el-descriptions-item>
-          <el-descriptions-item label="平均评分">{{ employerProfile.average_rating ?? 'N/A' }}</el-descriptions-item>
-          <el-descriptions-item label="累计发布工作数">{{ employerProfile.total_jobs_posted ?? 0 }}</el-descriptions-item>
-        </el-descriptions>
-
-        <template v-if="employerProfile.profile_type === 'company'">
-          <el-divider />
-          <el-descriptions title="公司信息" :column="1" border>
-            <el-descriptions-item label="公司名称">{{ employerProfile.company_name || '未填写' }}</el-descriptions-item>
-            <el-descriptions-item label="统一社会信用代码">{{ employerProfile.business_license_number || '未填写' }}</el-descriptions-item>
-            <el-descriptions-item label="公司地址">{{ employerProfile.company_address || '未填写' }}</el-descriptions-item>
-            <el-descriptions-item label="公司简介">{{ employerProfile.company_description || '未填写' }}</el-descriptions-item>
-            <el-descriptions-item label="营业执照照片">
-              <el-image 
-                v-if="employerProfile.business_license_photo_url"
-                style="width: 100px; height: 100px"
-                :src="employerProfile.business_license_photo_url" 
-                :preview-src-list="[employerProfile.business_license_photo_url]"
-                fit="cover"
-              />
-              <span v-else>未上传</span>
-            </el-descriptions-item>
-          </el-descriptions>
-        </template>
-
-      </div>
-    </el-card>
+            <el-button type="info" @click="navigateTo('/employer/jobs')">
+              <el-icon><Document /></el-icon>管理工作
+            </el-button>
+            <el-button type="success" @click="navigateTo('/employer/orders')">
+              <el-icon><List /></el-icon>查看订单
+            </el-button>
+            <el-button type="warning" @click="navigateTo('/employer/profile/edit')">
+              <el-icon><Setting /></el-icon>编辑档案
+            </el-button>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
+    
+    <!-- 最近申请 -->
+    <el-row :gutter="20" class="recent-row">
+      <el-col :md="12">
+        <el-card shadow="never" class="recent-card">
+          <template #header>
+            <div class="card-header">
+              <h2>最新工作申请</h2>
+              <el-button text @click="navigateTo('/employer/jobs')">查看全部</el-button>
+            </div>
+          </template>
+          
+          <div v-if="loading.recentApplications" class="loading-placeholder">
+            <el-skeleton :rows="5" animated />
+          </div>
+          
+          <el-empty 
+            v-else-if="recentApplications.length === 0" 
+            description="暂无最新申请"
+            :image-size="80"
+          />
+          
+          <div v-else class="recent-applications">
+            <el-table :data="recentApplications" style="width: 100%">
+              <el-table-column label="申请者" min-width="160">
+                <template #default="{ row }">
+                  <div class="applicant-info">
+                    <el-avatar :size="32" :src="row.freelancer.avatar_url">
+                      {{ row.freelancer.nickname ? row.freelancer.nickname.substring(0, 1).toUpperCase() : 'U' }}
+                    </el-avatar>
+                    <span>{{ row.freelancer.nickname || `用户 #${row.freelancer_user_id}` }}</span>
+                  </div>
+                </template>
+              </el-table-column>
+              
+              <el-table-column label="工作" min-width="180" show-overflow-tooltip>
+                <template #default="{ row }">
+                  {{ row.job.title }}
+                </template>
+              </el-table-column>
+              
+              <el-table-column label="申请时间" min-width="100">
+                <template #default="{ row }">
+                  {{ formatDateTime(row.created_at) }}
+                </template>
+              </el-table-column>
+              
+              <el-table-column label="状态" min-width="90">
+                <template #default="{ row }">
+                  <el-tag :type="getStatusType(row.status)">{{ getStatusText(row.status) }}</el-tag>
+                </template>
+              </el-table-column>
+              
+              <el-table-column label="操作" min-width="120" fixed="right">
+                <template #default="{ row }">
+                  <el-button 
+                    size="small" 
+                    @click="navigateTo(`/employer/jobs/${row.job_id}/applicants`)"
+                  >
+                    查看
+                  </el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </el-card>
+      </el-col>
+      
+      <el-col :md="12">
+        <el-card shadow="never" class="recent-card">
+          <template #header>
+            <div class="card-header">
+              <h2>近期工作</h2>
+              <el-button text @click="navigateTo('/employer/jobs')">查看全部</el-button>
+            </div>
+          </template>
+          
+          <div v-if="loading.recentJobs" class="loading-placeholder">
+            <el-skeleton :rows="5" animated />
+          </div>
+          
+          <el-empty 
+            v-else-if="recentJobs.length === 0" 
+            description="暂无工作"
+            :image-size="80"
+          />
+          
+          <div v-else class="recent-jobs">
+            <el-table :data="recentJobs" style="width: 100%">
+              <el-table-column label="工作标题" min-width="180" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <router-link :to="`/jobs/${row.id}`" class="job-title-link">
+                    {{ row.title }}
+                  </router-link>
+                </template>
+              </el-table-column>
+              
+              <el-table-column label="薪资" min-width="120">
+                <template #default="{ row }">
+                  {{ row.salary_amount }}元/{{ getSalaryTypeText(row.salary_type) }}
+                </template>
+              </el-table-column>
+              
+              <el-table-column label="状态" min-width="90">
+                <template #default="{ row }">
+                  <el-tag :type="getJobStatusType(row.status)">{{ getJobStatusText(row.status) }}</el-tag>
+                </template>
+              </el-table-column>
+              
+              <el-table-column label="申请人数" min-width="90" align="center">
+                <template #default="{ row }">
+                  <router-link 
+                    v-if="row.application_count > 0"
+                    :to="`/employer/jobs/${row.id}/applicants`" 
+                    class="applicant-link"
+                  >
+                    {{ row.application_count }}
+                  </router-link>
+                  <span v-else>0</span>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, reactive, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import axios from 'axios';
-import { EditPen } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
+import { Briefcase, Clock, DocumentChecked, ShoppingCart, Plus, Document, List, Setting } from '@element-plus/icons-vue';
 import { useAuthStore } from '@/stores/auth';
-import apiConfig from '@/utils/apiConfig';
+import apiClient from '@/utils/apiClient';
+import dayjs from 'dayjs';
 
-// 路由和状态管理
+// 路由与状态管理
 const router = useRouter();
 const authStore = useAuthStore();
 
-// 页面状态
-const loadingProfile = ref(true);
-const employerProfile = ref<any>(null);
-const profileExistsAndLoaded = computed(() => employerProfile.value !== null);
+// 加载状态
+const loading = reactive({
+  dashboard: false,
+  recentJobs: false,
+  recentApplications: false
+});
 
-// 获取雇主档案数据
-const fetchEmployerProfile = async () => {
-  loadingProfile.value = true;
+// 仪表盘数据
+const dashboardData = reactive({
+  total_posted_jobs: 0,
+  active_jobs: 0,
+  pending_applications: 0,
+  active_orders: 0
+});
 
+// 最近申请和工作
+const recentApplications = ref([]);
+const recentJobs = ref([]);
+
+// 获取仪表盘数据
+const fetchDashboardData = async () => {
+  loading.dashboard = true;
   try {
-    // 获取认证token
-    const token = authStore.token;
-    if (!token) {
-      ElMessage.error('您尚未登录或登录已过期');
-      router.push('/login');
-      return;
-    }
-
-    // 直接使用axios请求API
-    const response = await axios.get(apiConfig.getApiUrl('profiles/employer/me'), {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-
-    // 处理API响应
-    if (response.data && response.data.code === 0) {
-      employerProfile.value = response.data.data;
-    } else {
-      console.error('获取雇主档案失败:', response.data);
-      employerProfile.value = null;
-    }
-  } catch (error: any) {
-    console.error('获取雇主档案失败:', error);
+    const response = await apiClient.get('employer/dashboard');
     
-    // 处理404错误（未创建档案）
-    if (error.response && error.response.status === 404) {
-      employerProfile.value = null;
-    } else {
-      ElMessage.error(error.response?.data?.message || '获取雇主档案失败，请稍后重试');
-    }
+    // 更新仪表盘数据
+    Object.assign(dashboardData, response.data);
+  } catch (error) {
+    console.error('获取仪表盘数据失败:', error);
   } finally {
-    loadingProfile.value = false;
+    loading.dashboard = false;
   }
 };
 
-// 页面跳转函数
-const goToEditProfile = () => {
-  router.push('/employer/edit-profile');
+// 获取最新申请
+const fetchRecentApplications = async () => {
+  loading.recentApplications = true;
+  try {
+    const response = await apiClient.get('employer/recent-applications', {
+      params: {
+        limit: 5 // 只获取最新的5条
+      }
+    });
+    
+    recentApplications.value = response.data;
+  } catch (error) {
+    console.error('获取最新申请失败:', error);
+  } finally {
+    loading.recentApplications = false;
+  }
 };
 
-const goToVerificationPage = () => {
-  router.push('/verifications/submit');
+// 获取最近工作
+const fetchRecentJobs = async () => {
+  loading.recentJobs = true;
+  try {
+    const response = await apiClient.get('jobs/my-posted', {
+      params: {
+        page: 1,
+        per_page: 5,
+        sort_by: 'created_at_desc'
+      }
+    });
+    
+    recentJobs.value = response.data.items;
+  } catch (error) {
+    console.error('获取最近工作失败:', error);
+  } finally {
+    loading.recentJobs = false;
+  }
 };
 
-// 格式化显示函数
-const profileTypeDisplay = (type: string) => {
-  const types: Record<string, string> = {
-    'individual': '个人雇主',
-    'company': '企业雇主'
+// 导航到指定路径
+const navigateTo = (path) => {
+  router.push(path);
+};
+
+// 格式化日期时间
+const formatDateTime = (dateString) => {
+  if (!dateString) return '';
+  return dayjs(dateString).format('YYYY-MM-DD HH:mm');
+};
+
+// 获取申请状态显示文本
+const getStatusText = (status) => {
+  const statusMap = {
+    pending: '待处理',
+    accepted: '已接受',
+    rejected: '已拒绝',
+    cancelled: '已取消'
   };
-  return types[type] || type;
-};
-
-const verificationStatusDisplay = (status: string | null | undefined) => {
-  if (!status) return '未认证';
-  
-  const statusMap: Record<string, string> = {
-    'not_verified': '未认证',
-    'pending': '审核中',
-    'verified': '已认证',
-    'failed': '认证失败'
-  };
-  
   return statusMap[status] || status;
 };
 
-const verificationStatusType = (status: string | null | undefined) => {
-  if (!status) return 'info';
-  
-  const typeMap: Record<string, 'info' | 'success' | 'warning' | 'danger'> = {
-    'not_verified': 'info',
-    'pending': 'warning',
-    'verified': 'success',
-    'failed': 'danger'
+// 获取申请状态标签类型
+const getStatusType = (status) => {
+  const typeMap = {
+    pending: 'warning',
+    accepted: 'success',
+    rejected: 'danger',
+    cancelled: 'info'
   };
-  
   return typeMap[status] || 'info';
 };
 
-const locationDisplay = (profile: any) => {
-  const parts = [];
-  
-  if (profile.location_province) parts.push(profile.location_province);
-  if (profile.location_city) parts.push(profile.location_city);
-  if (profile.location_district) parts.push(profile.location_district);
-  
-  return parts.length > 0 ? parts.join(' ') : '未填写';
+// 获取工作状态显示文本
+const getJobStatusText = (status) => {
+  const statusMap = {
+    draft: '草稿',
+    pending: '待审核',
+    approved: '已通过',
+    rejected: '已拒绝',
+    active: '进行中',
+    cancelled: '已取消',
+    completed: '已完成',
+    expired: '已过期'
+  };
+  return statusMap[status] || status;
 };
 
-// 组件挂载时执行
+// 获取工作状态标签类型
+const getJobStatusType = (status) => {
+  const typeMap = {
+    draft: 'info',
+    pending: 'warning',
+    approved: 'success',
+    rejected: 'danger',
+    active: 'success',
+    cancelled: 'info',
+    completed: 'success',
+    expired: 'info'
+  };
+  return typeMap[status] || 'info';
+};
+
+// 获取薪资类型文本
+const getSalaryTypeText = (type) => {
+  const typeMap = {
+    fixed: '固定',
+    hourly: '小时',
+    daily: '天',
+    weekly: '周',
+    monthly: '月'
+  };
+  return typeMap[type] || type;
+};
+
+// 组件挂载
 onMounted(() => {
-  // 检查用户是否登录
-  if (!authStore.isLoggedIn) {
-    ElMessage.warning('请先登录');
+  // 检查用户角色是否为雇主
+  if (!authStore.isLoggedIn || authStore.user?.current_role !== 'employer') {
+    ElMessage.warning('请先以雇主身份登录');
     router.push('/login');
     return;
   }
   
-  // 获取雇主档案数据
-  fetchEmployerProfile();
+  // 获取数据
+  fetchDashboardData();
+  fetchRecentApplications();
+  fetchRecentJobs();
 });
 </script>
 
 <style scoped>
 .page-container {
-  padding: 20px;
-  max-width: 1000px;
+  max-width: 1200px;
   margin: 20px auto;
+  padding: 0 15px;
+}
+
+.page-title {
+  font-size: 1.8em;
+  margin-bottom: 20px;
+  font-weight: bold;
+  color: #303133;
+}
+
+.stats-row {
+  margin-bottom: 20px;
+}
+
+.stats-card {
+  position: relative;
+  height: 120px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.stats-content {
+  position: relative;
+  z-index: 1;
+}
+
+.stats-value {
+  font-size: 2em;
+  font-weight: bold;
+  margin-bottom: 5px;
+  color: #303133;
+}
+
+.stats-label {
+  font-size: 1em;
+  color: #606266;
+}
+
+.stats-icon {
+  position: absolute;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.2;
+}
+
+.action-row {
+  margin-bottom: 20px;
+}
+
+.quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.recent-row {
+  margin-bottom: 20px;
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.card-header h2 {
   font-size: 1.2em;
+  margin: 0;
   font-weight: bold;
 }
 
-.action-buttons {
+.loading-placeholder {
+  padding: 10px 0;
+}
+
+.recent-card {
+  height: 420px;
+  margin-bottom: 20px;
+}
+
+.applicant-info {
   display: flex;
+  align-items: center;
   gap: 10px;
 }
 
-.loading-state,
-.profile-details {
-  padding: 20px;
+.job-title-link,
+.applicant-link {
+  color: #409EFF;
+  text-decoration: none;
 }
 
-.el-descriptions {
-    margin-top: 20px;
+.job-title-link:hover,
+.applicant-link:hover {
+  text-decoration: underline;
 }
 
-.el-avatar,
-.el-image {
-    border: 1px solid #eee;
-    border-radius: 4px;
-}
-
-.el-empty {
-    padding: 40px 0;
+@media (max-width: 768px) {
+  .quick-actions {
+    flex-direction: column;
+  }
+  
+  .quick-actions .el-button {
+    width: 100%;
+  }
+  
+  .recent-card {
+    height: auto;
+  }
 }
 </style>
